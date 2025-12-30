@@ -1,0 +1,157 @@
+{
+	"name": "Ree Template",
+	"scopeName": "text.html.ree",
+	"fileTypes": [
+		"ree"
+	],
+	"patterns": [
+		{
+			"include": "#ree-tags"
+		},
+		{
+			"include": "text.html.basic"
+		}
+	],
+	"repository": {
+		"ree-tags": {
+			"patterns": [
+				{
+					"name": "comment.block.ree",
+					"begin": "/\\*",
+					"end": "\\*/",
+					"patterns": []
+				},
+				{
+					"name": "meta.embedded.block.ree",
+					"begin": "\\{#",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"include": "#ree-keywords"
+						},
+						{
+							"include": "#ree-operators"
+						},
+						{
+							"include": "source.js"
+						}
+					]
+				},
+				{
+					"name": "meta.embedded.block.ree",
+					"begin": "\\{/",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"include": "#ree-keywords"
+						}
+					]
+				},
+				{
+					"name": "meta.embedded.block.ree",
+					"begin": "\\{:",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"include": "#ree-keywords"
+						}
+					]
+				},
+				{
+					"name": "meta.embedded.inline.ree",
+					"begin": "\\{=",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"include": "source.js"
+						}
+					]
+				},
+				{
+					"name": "meta.embedded.inline.ree",
+					"begin": "\\{~",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"include": "source.js"
+						}
+					]
+				}
+			]
+		},
+		"ree-keywords": {
+			"patterns": [
+				{
+					"name": "keyword.control.ree",
+					"match": "\\b(if|else|each|unless|await)\\b"
+				},
+				{
+					"name": "keyword.control.ree",
+					"match": "\\b(include|layout)\\b"
+				},
+				{
+					"name": "keyword.control.ree",
+					"match": "\\b(as|then|catch)\\b"
+				}
+			]
+		},
+		"ree-operators": {
+			"patterns": [
+				{
+					"name": "keyword.operator.ree",
+					"match": "=>|\\|\\||&&|!|===|==|!==|!=|<=|>=|<|>|\\?"
+				}
+			]
+		}
+	}
+}
