@@ -1,0 +1,93 @@
+{
+	"name": "Eta Template",
+	"scopeName": "text.html.eta",
+	"fileTypes": [
+		"eta"
+	],
+	"patterns": [
+		{
+			"include": "#eta-tags"
+		},
+		{
+			"include": "text.html.basic"
+		}
+	],
+	"repository": {
+		"eta-tags": {
+			"patterns": [
+				{
+					"name": "comment.block.eta",
+					"begin": "<%\\*",
+					"end": "\\*%>",
+					"patterns": []
+				},
+				{
+					"name": "meta.embedded.block.eta",
+					"begin": "<%~?",
+					"end": "%>",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.eta"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.eta"
+						}
+					},
+					"patterns": [
+						{
+							"include": "#eta-keywords"
+						},
+						{
+							"include": "#eta-operators"
+						},
+						{
+							"include": "source.js"
+						}
+					]
+				},
+				{
+					"name": "meta.embedded.inline.eta",
+					"begin": "<%=",
+					"end": "%>",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.eta"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.eta"
+						}
+					},
+					"patterns": [
+						{
+							"include": "source.js"
+						}
+					]
+				}
+			]
+		},
+		"eta-keywords": {
+			"patterns": [
+				{
+					"name": "keyword.control.eta",
+					"match": "\\b(if|else|foreach|for|while|each|it)\\b"
+				},
+				{
+					"name": "keyword.control.eta",
+					"match": "\\b(include|includeFile|layout)\\b"
+				}
+			]
+		},
+		"eta-operators": {
+			"patterns": [
+				{
+					"name": "keyword.operator.eta",
+					"match": "=>|\\|\\||&&|!|===|==|!==|!=|<=|>=|<|>"
+				}
+			]
+		}
+	}
+}

@@ -1,0 +1,97 @@
+{
+	"name": "ree-templates",
+	"displayName": "ree Templates",
+	"description": "Syntax highlighting and formatting for ree templates",
+	"version": "1.0.0",
+	"publisher": "reepolee",
+	"license": "MIT",
+	"icon": "icon.png",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/reepolee/ree-templates"
+	},
+	"bugs": {
+		"url": "https://github.com/reepolee/ree-templates/issues"
+	},
+	"homepage": "https://github.com/reepolee/ree-templates#readme",
+	"engines": {
+		"vscode": "^1.60.0"
+	},
+	"categories": [
+		"Programming Languages",
+		"Formatters"
+	],
+	"activationEvents": [
+		"onLanguage:ree"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"languages": [
+			{
+				"id": "ree",
+				"aliases": [
+					"ree",
+					"ree"
+				],
+				"extensions": [
+					".ree"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "ree",
+				"scopeName": "text.html.ree",
+				"path": "./syntaxes/ree.tmLanguage.json"
+			}
+		],
+		"commands": [
+			{
+				"command": "ree.format",
+				"title": "Format ree Template"
+			}
+		],
+		"configuration": {
+			"title": "ree Templates",
+			"properties": {
+				"ree.indentationType": {
+					"type": "string",
+					"enum": [
+						"spaces",
+						"tabs"
+					],
+					"default": "spaces",
+					"description": "Use spaces or tabs for indentation"
+				},
+				"ree.tabSize": {
+					"type": "number",
+					"default": 2,
+					"description": "Number of spaces for indentation (when using spaces)"
+				}
+			}
+		}
+	},
+	"scripts": {
+		"compile": "npm run check-types && node esbuild.js",
+		"check-types": "tsc --noEmit",
+		"watch": "npm-run-all -p watch:*",
+		"watch:esbuild": "node esbuild.js --watch",
+		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+		"vscode:prepublish": "npm run package",
+		"package": "npm run check-types && node esbuild.js --production",
+		"bundle": "git push && pnpm version patch && git push &&  npm run package && vsce package --no-update-package-json"
+	},
+	"devDependencies": {
+		"@types/js-beautify": "^1.14.3",
+		"@types/node": "^25.0.3",
+		"@types/vscode": "^1.107.0",
+		"@vscode/vsce": "^3.7.1",
+		"esbuild": "^0.27.2",
+		"npm-run-all": "^4.1.5",
+		"typescript": "^5.9.3"
+	},
+	"dependencies": {
+		"js-beautify": "^1.15.4"
+	}
+}
