@@ -46,6 +46,11 @@
 				"path": "./syntaxes/ree.tmLanguage.json"
 			}
 		],
+		"emmet": {
+			"includeLanguages": {
+				"ree": "html"
+			}
+		},
 		"commands": [
 			{
 				"command": "ree.format",
