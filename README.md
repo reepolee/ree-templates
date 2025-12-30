@@ -1,3 +1,3 @@
-Formatter for ETA templates.
+Formatter for REE templates.
 
-1.0.15 Bundled
+1.0.5 Bundled
