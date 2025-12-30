@@ -46,11 +46,6 @@
 				"path": "./syntaxes/ree.tmLanguage.json"
 			}
 		],
-		"emmet": {
-			"includeLanguages": {
-				"ree": "html"
-			}
-		},
 		"commands": [
 			{
 				"command": "ree.format",
@@ -74,6 +69,14 @@
 					"default": 2,
 					"description": "Number of spaces for indentation (when using spaces)"
 				}
+			}
+		},
+		"configurationDefaults": {
+			"[ree]": {
+				"editor.defaultFormatter": "reepolee.ree-templates"
+			},
+			"emmet.includeLanguages": {
+				"ree": "html"
 			}
 		}
 	},
