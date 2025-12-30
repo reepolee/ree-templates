@@ -1,3 +1,3 @@
 Formatter for REE templates.
 
-1.0.5 Bundled
+Ree templates are used by Reepolee for our Bun Apps. Stay tuned for v1.
