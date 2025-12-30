@@ -15,7 +15,7 @@
 	},
 	"homepage": "https://github.com/reepolee/ree-templates#readme",
 	"engines": {
-		"vscode": "^1.60.0"
+		"vscode": "^1.107.0"
 	},
 	"categories": [
 		"Programming Languages",
