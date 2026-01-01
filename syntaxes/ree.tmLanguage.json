@@ -126,6 +126,30 @@
 							"include": "source.js"
 						}
 					]
+				},
+				{
+					"name": "meta.embedded.directive.ree",
+					"begin": "\\{@",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"name": "entity.name.function.ree",
+							"match": "[a-z-]+"
+						},
+						{
+							"include": "source.js"
+						}
+					]
 				}
 			]
 		},
