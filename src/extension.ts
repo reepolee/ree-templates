@@ -8,12 +8,9 @@ export function activate(context: vscode.ExtensionContext) {
 			const indentationType = config.get<string>('indentationType', 'spaces');
 			const tabSize = config.get<number>('tabSize', 2);
 			const formatted = formatReeTemplate(document.getText(), indentationType, tabSize);
-			const fullRange = new vscode.Range(
-				document.positionAt(0),
-				document.positionAt(document.getText().length)
-			);
+			const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
 			return [vscode.TextEdit.replace(fullRange, formatted)];
-		}
+		},
 	});
 
 	const command = vscode.commands.registerCommand('ree.format', () => {
@@ -31,7 +28,7 @@ function formatReeTemplate(content: string, indentationType: string, tabSize: nu
 	const reeTagMap: Map<string, string> = new Map();
 	let placeholderIndex = 0;
 
-	const protectedContent = content.replace(/\{[#=~].*?\}/g, (match) => {
+	const protectedContent = content.replace(/\{[#=~@].*?\}/g, (match) => {
 		const placeholder = `___REE_PLACEHOLDER_${placeholderIndex}___`;
 		reeTagMap.set(placeholder, match);
 		placeholderIndex++;
@@ -48,7 +45,7 @@ function formatReeTemplate(content: string, indentationType: string, tabSize: nu
 		indent_inner_html: true,
 		end_with_newline: false,
 		unformatted: [],
-		content_unformatted: ['pre', 'textarea']
+		content_unformatted: ['pre', 'textarea'],
 	});
 
 	// Step 3: Restore ree tags
@@ -83,9 +80,7 @@ function adjustReeIndentation(content: string, indentationType: string, tabSize:
 
 		// Get base indentation from HTML formatter
 		const baseIndent = line.match(/^[\t ]*/)?.[0] || '';
-		const baseIndentLevel = indentationType === 'tabs'
-			? baseIndent.length
-			: Math.floor(baseIndent.length / tabSize);
+		const baseIndentLevel = indentationType === 'tabs' ? baseIndent.length : Math.floor(baseIndent.length / tabSize);
 
 		// Apply ree adjustment
 		const totalIndent = Math.max(0, baseIndentLevel + reeIndentAdjustment);
@@ -102,8 +97,7 @@ function adjustReeIndentation(content: string, indentationType: string, tabSize:
 
 function isReeOpening(line: string): boolean {
 	// Check for opening control structures: {#if, {#each, etc.
-	return /\{#(if|each|unless|await)\b/.test(line) ||
-		isReeElse(line);
+	return /\{#(if|each|unless|await)\b/.test(line) || isReeElse(line);
 }
 
 function isReeClosing(line: string): boolean {
@@ -119,4 +113,4 @@ function isReeElse(line: string): boolean {
 	return /\{:else(\s+if\b)?\b/.test(line);
 }
 
-export function deactivate() { }
+export function deactivate() {}
