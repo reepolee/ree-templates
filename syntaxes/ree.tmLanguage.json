@@ -144,7 +144,7 @@
 					"patterns": [
 						{
 							"name": "entity.name.function.ree",
-							"match": "[a-z-]+"
+							"match": "[a-zA-Z_][a-zA-Z0-9_-]*(?=\\()"
 						},
 						{
 							"include": "source.js"
