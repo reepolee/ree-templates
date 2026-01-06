@@ -28,7 +28,7 @@ function formatReeTemplate(content: string, indentationType: string, tabSize: nu
 	const reeTagMap: Map<string, string> = new Map();
 	let placeholderIndex = 0;
 
-	const protectedContent = content.replace(/\{[#=~@].*?\}/g, (match) => {
+	const protectedContent = content.replace(/\{[#=~@:\/].*?\}/g, (match) => {
 		const placeholder = `___REE_PLACEHOLDER_${placeholderIndex}___`;
 		reeTagMap.set(placeholder, match);
 		placeholderIndex++;
