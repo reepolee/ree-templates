@@ -2,7 +2,7 @@
 	"name": "ree-templates",
 	"displayName": "ree Templates",
 	"description": "Syntax highlighting and formatting for ree templates",
-	"version": "1.0.17",
+	"version": "1.0.18",
 	"publisher": "reepolee",
 	"license": "MIT",
 	"icon": "icon.png",
