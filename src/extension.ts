@@ -37,7 +37,7 @@ function readAlpineJson(extPath: string, candidates: string[]): any | null {
 }
 
 function loadAlpineData(): AlpineData | null {
-	const ext = vscode.extensions.getExtension('sperovita.alpinejs-syntax-highlight');
+	const ext = vscode.extensions.getExtension('pcbowers.alpine-intellisense');
 	if (!ext) return null;
 
 	const extPath = ext.extensionPath;
