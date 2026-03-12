@@ -9,10 +9,96 @@
 			"include": "#ree-tags"
 		},
 		{
+			"include": "#alpine-attributes"
+		},
+		{
 			"include": "text.html.basic"
 		}
 	],
 	"repository": {
+		"alpine-attributes": {
+			"patterns": [
+				{
+					"comment": "x-data, x-bind, x-show, x-if, x-for, x-model, x-text, x-html, x-ref, x-effect, x-ignore, x-cloak, x-teleport, x-trap",
+					"name": "meta.attribute.alpine.ree",
+					"match": "\\b(x-[a-zA-Z][a-zA-Z0-9-]*)\\b",
+					"captures": {
+						"1": {
+							"name": "entity.other.attribute-name.alpine.ree"
+						}
+					}
+				},
+				{
+					"comment": "@event shorthand for x-on:event",
+					"name": "meta.attribute.alpine.event.ree",
+					"match": "(@[a-zA-Z][a-zA-Z0-9-]*(?:\\.[a-zA-Z0-9-]+)*)",
+					"captures": {
+						"1": {
+							"name": "entity.other.attribute-name.alpine.event.ree"
+						}
+					}
+				},
+				{
+					"comment": ":prop shorthand for x-bind:prop",
+					"name": "meta.attribute.alpine.bind.ree",
+					"match": "(?<=[\\s<])(:(?!:)[a-zA-Z][a-zA-Z0-9-]*)",
+					"captures": {
+						"1": {
+							"name": "entity.other.attribute-name.alpine.bind.ree"
+						}
+					}
+				},
+				{
+					"comment": "Alpine magic properties: $el, $refs, $store, $watch, $dispatch, $nextTick, $data, $id",
+					"name": "variable.language.alpine.magic.ree",
+					"match": "\\$(el|refs|store|watch|dispatch|nextTick|data|id)\\b"
+				},
+				{
+					"comment": "Highlight Alpine attribute value expressions as embedded JS",
+					"name": "meta.attribute.alpine.value.ree",
+					"begin": "(?<=(x-[a-zA-Z][a-zA-Z0-9-]*|@[a-zA-Z][a-zA-Z0-9-.]*|:[a-zA-Z][a-zA-Z0-9-]*)\\s*=\\s*)\"",
+					"end": "\"",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.string.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.string.end.ree"
+						}
+					},
+					"contentName": "meta.embedded.expression.alpine.ree",
+					"patterns": [
+						{
+							"include": "source.js"
+						}
+					]
+				},
+				{
+					"comment": "Single-quoted Alpine attribute value expressions as embedded JS",
+					"name": "meta.attribute.alpine.value.ree",
+					"begin": "(?<=(x-[a-zA-Z][a-zA-Z0-9-]*|@[a-zA-Z][a-zA-Z0-9-.]*|:[a-zA-Z][a-zA-Z0-9-]*)\\s*=\\s*)'",
+					"end": "'",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.string.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.string.end.ree"
+						}
+					},
+					"contentName": "meta.embedded.expression.alpine.ree",
+					"patterns": [
+						{
+							"include": "source.js"
+						}
+					]
+				}
+			]
+		},
 		"ree-tags": {
 			"patterns": [
 				{
