@@ -37,22 +37,14 @@ function readAlpineJson(extPath: string, candidates: string[]): any | null {
 }
 
 function loadAlpineData(): AlpineData | null {
-	const ext = vscode.extensions.getExtension('adrianwilczynski.alpine-js-intellisense');
+	const ext = vscode.extensions.getExtension('sperovita.alpinejs-syntax-highlight');
 	if (!ext) return null;
 
 	const extPath = ext.extensionPath;
 
-	const snippets = readAlpineJson(extPath, [
-		'snippets/html.json',
-		'snippets/snippets.json',
-	]);
+	const snippets = readAlpineJson(extPath, ['snippets/html.json', 'snippets/snippets.json']);
 
-	const customData = readAlpineJson(extPath, [
-		'out/data/htmlData.json',
-		'data/htmlData.json',
-		'out/htmlData.json',
-		'htmlData.json',
-	]);
+	const customData = readAlpineJson(extPath, ['out/data/htmlData.json', 'data/htmlData.json', 'out/htmlData.json', 'htmlData.json']);
 
 	if (!snippets && !customData) return null;
 
@@ -91,10 +83,7 @@ function registerAlpineSupport(context: vscode.ExtensionContext): void {
 	const provider = vscode.languages.registerCompletionItemProvider(
 		{ language: 'ree' },
 		{
-			provideCompletionItems(
-				document: vscode.TextDocument,
-				position: vscode.Position
-			): vscode.CompletionItem[] | undefined {
+			provideCompletionItems(document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] | undefined {
 				const lineText = document.lineAt(position).text;
 
 				if (!isCursorInHtmlTag(lineText, position)) return undefined;
@@ -103,14 +92,8 @@ function registerAlpineSupport(context: vscode.ExtensionContext): void {
 
 				// Attribute name completions (x-data, x-show, @click, :class …)
 				for (const attr of attributes) {
-					const item = new vscode.CompletionItem(
-						attr.name,
-						vscode.CompletionItemKind.Property
-					);
-					const desc =
-						typeof attr.description === 'object'
-							? attr.description.value
-							: attr.description;
+					const item = new vscode.CompletionItem(attr.name, vscode.CompletionItemKind.Property);
+					const desc = typeof attr.description === 'object' ? attr.description.value : attr.description;
 					if (desc) {
 						item.documentation = new vscode.MarkdownString(desc);
 					}
@@ -122,28 +105,21 @@ function registerAlpineSupport(context: vscode.ExtensionContext): void {
 
 				// Snippet completions
 				for (const [name, snippet] of Object.entries(snippets)) {
-					const item = new vscode.CompletionItem(
-						name,
-						vscode.CompletionItemKind.Snippet
-					);
-					const body = Array.isArray(snippet.body)
-						? snippet.body.join('\n')
-						: snippet.body;
+					const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Snippet);
+					const body = Array.isArray(snippet.body) ? snippet.body.join('\n') : snippet.body;
 					item.insertText = new vscode.SnippetString(body);
 					if (snippet.description) {
 						item.documentation = new vscode.MarkdownString(snippet.description);
 					}
-					const prefix = Array.isArray(snippet.prefix)
-						? snippet.prefix[0]
-						: snippet.prefix;
+					const prefix = Array.isArray(snippet.prefix) ? snippet.prefix[0] : snippet.prefix;
 					item.filterText = prefix;
 					item.sortText = `1_${name}`;
 					items.push(item);
 				}
 
 				return items;
-			}
-		}
+			},
+		},
 		// No trigger characters registered — provider is always active inside .ree
 	);
 
@@ -159,10 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const indentationType = config.get<string>('indentationType', 'spaces');
 			const tabSize = config.get<number>('tabSize', 2);
 			const formatted = formatReeTemplate(document.getText(), indentationType, tabSize);
-			const fullRange = new vscode.Range(
-				document.positionAt(0),
-				document.positionAt(document.getText().length)
-			);
+			const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
 			return [vscode.TextEdit.replace(fullRange, formatted)];
 		},
 	});
@@ -179,9 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
 	registerAlpineSupport(context);
 
 	// Re-register if Alpine extension is installed mid-session
-	context.subscriptions.push(
-		vscode.extensions.onDidChange(() => registerAlpineSupport(context))
-	);
+	context.subscriptions.push(vscode.extensions.onDidChange(() => registerAlpineSupport(context)));
 }
 
 // ─── Formatter ────────────────────────────────────────────────────────────────
@@ -235,9 +206,7 @@ function adjustReeIndentation(content: string, indentationType: string, tabSize:
 		}
 
 		const baseIndent = line.match(/^[\t ]*/)?.[0] || '';
-		const baseIndentLevel = indentationType === 'tabs'
-			? baseIndent.length
-			: Math.floor(baseIndent.length / tabSize);
+		const baseIndentLevel = indentationType === 'tabs' ? baseIndent.length : Math.floor(baseIndent.length / tabSize);
 
 		const totalIndent = Math.max(0, baseIndentLevel + reeIndentAdjustment);
 		formatted.push(indent.repeat(totalIndent) + trimmed);
