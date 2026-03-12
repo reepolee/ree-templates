@@ -1,5 +1,107 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { html as beautifyHtml } from 'js-beautify';
+
+// ─── Alpine Integration ───────────────────────────────────────────────────────
+
+interface AlpineSnippet {
+	prefix: string | string[];
+	body: string | string[];
+	description?: string;
+}
+
+interface AlpineAttribute {
+	name: string;
+	description?: string | { value: string };
+}
+
+interface AlpineData {
+	snippets: Record<string, AlpineSnippet>;
+	attributes: AlpineAttribute[];
+}
+
+function loadAlpineData(): AlpineData | null {
+	const ext = vscode.extensions.getExtension('adrianwilczynski.alpine-js-intellisense');
+	if (!ext) return null;
+
+	try {
+		const extPath = ext.extensionPath;
+
+		const snippets: Record<string, AlpineSnippet> = JSON.parse(fs.readFileSync(path.join(extPath, 'snippets', 'html.json'), 'utf8'));
+
+		const customData = JSON.parse(fs.readFileSync(path.join(extPath, 'out', 'data', 'htmlData.json'), 'utf8'));
+
+		const attributes: AlpineAttribute[] = customData?.globalAttributes ?? [];
+
+		return { snippets, attributes };
+	} catch {
+		return null;
+	}
+}
+
+function registerAlpineSupport(context: vscode.ExtensionContext): void {
+	const data = loadAlpineData();
+	if (!data) return;
+
+	const { snippets, attributes } = data;
+
+	// Snippet completions (x-data="{ ... }", @click="...", etc.)
+	const snippetProvider = vscode.languages.registerCompletionItemProvider(
+		{ language: 'ree' },
+		{
+			provideCompletionItems(document: vscode.TextDocument, position: vscode.Position) {
+				const linePrefix = document.lineAt(position).text.slice(0, position.character);
+				if (!/<[^>]*$/.test(linePrefix)) return undefined;
+
+				return Object.entries(snippets).map(([name, snippet]) => {
+					const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Property);
+					const body = Array.isArray(snippet.body) ? snippet.body.join('\n') : snippet.body;
+					item.insertText = new vscode.SnippetString(body);
+					if (snippet.description) {
+						item.documentation = new vscode.MarkdownString(snippet.description);
+					}
+					const prefix = Array.isArray(snippet.prefix) ? snippet.prefix[0] : snippet.prefix;
+					item.filterText = prefix;
+					return item;
+				});
+			},
+		},
+		' ',
+		':',
+		'@',
+	);
+
+	// Attribute name completions from customData (x-show, x-bind, etc.)
+	const attributeProvider = vscode.languages.registerCompletionItemProvider(
+		{ language: 'ree' },
+		{
+			provideCompletionItems(document: vscode.TextDocument, position: vscode.Position) {
+				const linePrefix = document.lineAt(position).text.slice(0, position.character);
+				if (!/<[^>]*$/.test(linePrefix)) return undefined;
+
+				return attributes.map((attr) => {
+					const item = new vscode.CompletionItem(attr.name, vscode.CompletionItemKind.Property);
+					const desc = typeof attr.description === 'object' ? attr.description.value : attr.description;
+					if (desc) {
+						item.documentation = new vscode.MarkdownString(desc);
+					}
+					item.insertText = new vscode.SnippetString(`${attr.name}="$1"$0`);
+					return item;
+				});
+			},
+		},
+		' ',
+		':',
+		'@',
+		'x',
+		'-',
+	);
+
+	context.subscriptions.push(snippetProvider, attributeProvider);
+}
+
+// ─── Activation ───────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext) {
 	const formatter = vscode.languages.registerDocumentFormattingEditProvider('ree', {
@@ -21,7 +123,14 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(formatter, command);
+
+	// Register Alpine support if the extension is installed.
+	// Re-register if extensions change (e.g. user installs Alpine mid-session).
+	registerAlpineSupport(context);
+	context.subscriptions.push(vscode.extensions.onDidChange(() => registerAlpineSupport(context)));
 }
+
+// ─── Formatter ────────────────────────────────────────────────────────────────
 
 function formatReeTemplate(content: string, indentationType: string, tabSize: number): string {
 	// Step 1: Protect ree tags by replacing them with placeholders
@@ -66,15 +175,13 @@ function adjustReeIndentation(content: string, indentationType: string, tabSize:
 	const indent = indentationType === 'tabs' ? '\t' : ' '.repeat(tabSize);
 	let reeIndentAdjustment = 0;
 
-	for (let line of lines) {
+	for (const line of lines) {
 		const trimmed = line.trim();
 
 		// Check for else statement (closes one block, opens another)
 		if (isReeElse(trimmed)) {
 			reeIndentAdjustment--;
-		}
-		// Check for other ree closing tags
-		else if (isReeClosing(trimmed)) {
+		} else if (isReeClosing(trimmed)) {
 			reeIndentAdjustment--;
 		}
 
@@ -96,20 +203,15 @@ function adjustReeIndentation(content: string, indentationType: string, tabSize:
 }
 
 function isReeOpening(line: string): boolean {
-	// Check for opening control structures: {#if, {#each, etc.
 	return /\{#(if|each|unless|await)\b/.test(line) || isReeElse(line);
 }
 
 function isReeClosing(line: string): boolean {
-	// Check for closing tags {/if, {/each, etc., but not else statements
-	if (isReeElse(line)) {
-		return false;
-	}
+	if (isReeElse(line)) return false;
 	return /\{\/[a-z]+\s*\}/.test(line);
 }
 
 function isReeElse(line: string): boolean {
-	// Matches: {:else} or {:else if condition}
 	return /\{:else(\s+if\b)?\b/.test(line);
 }
 
