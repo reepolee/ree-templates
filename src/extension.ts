@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 
@@ -11,13 +12,19 @@ export function activate(context: vscode.ExtensionContext) {
 			const customPath = config.get<string>('reefmtPath', '');
 			const cmd = customPath || 'reefmt';
 
+			// reefmt writes in-place, so disk must match editor content first
+			if (document.isDirty) {
+				await document.save();
+			}
+
 			try {
-				const { stdout } = await execFileP(cmd, [document.fileName], { timeout: 15000 });
+				await execFileP(cmd, [document.fileName], { timeout: 15000 });
+				const formatted = fs.readFileSync(document.fileName, 'utf8');
 				const fullRange = new vscode.Range(
 					document.positionAt(0),
 					document.positionAt(document.getText().length),
 				);
-				return [vscode.TextEdit.replace(fullRange, stdout)];
+				return [vscode.TextEdit.replace(fullRange, formatted)];
 			} catch (err: any) {
 				if (err.code === 'ENOENT') {
 					vscode.window.showWarningMessage(
