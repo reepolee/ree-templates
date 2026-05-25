@@ -271,11 +271,8 @@ export function activate(context: vscode.ExtensionContext) {
 			const customPath = config.get<string>('reefmtPath', '');
 			const cmd = customPath || 'reefmt';
 
-			if (document.isDirty) {
-				await document.save();
-			}
-
 			try {
+				fs.writeFileSync(document.fileName, document.getText());
 				await execFileP(cmd, [document.fileName], { timeout: 15000 });
 				const formatted = fs.readFileSync(document.fileName, 'utf8');
 				const fullRange = new vscode.Range(
