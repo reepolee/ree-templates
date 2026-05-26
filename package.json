@@ -19,7 +19,8 @@
 	},
 	"categories": [
 		"Programming Languages",
-		"Formatters"
+		"Formatters",
+		"Themes"
 	],
 	"activationEvents": [
 		"onLanguage:ree"
@@ -62,6 +63,13 @@
 				}
 			}
 		},
+		"iconThemes": [
+			{
+				"id": "ree-icons",
+				"label": "ree Icons",
+				"path": "./themes/ree-icon-theme.json"
+			}
+		],
 		"configurationDefaults": {
 			"[ree]": {
 				"editor.defaultFormatter": "reepolee.ree-templates"

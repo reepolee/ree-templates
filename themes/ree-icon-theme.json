@@ -1,0 +1,28 @@
+{
+	"information": [
+		{
+			"author": "reepolee",
+			"description": "Icon theme for ree Template files and folders"
+		}
+	],
+	"iconDefinitions": {
+		"_ree_file": {
+			"iconPath": "../icons/ree-file.svg"
+		},
+		"_ree_folder": {
+			"iconPath": "../icons/ree-folder.svg"
+		},
+		"_ree_config": {
+			"iconPath": "../icons/ree-config.svg"
+		}
+	},
+	"fileExtensions": {
+		"ree": "_ree_file"
+	},
+	"fileNames": {
+		"ree.config.json": "_ree_config"
+	},
+	"folderNames": {
+		"ree-templates": "_ree_folder"
+	}
+}

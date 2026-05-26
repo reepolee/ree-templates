@@ -12,3 +12,5 @@ tsconfig.json
 **/*.map
 node_modules/**
 .github/**
+!icons/**
+!themes/**
