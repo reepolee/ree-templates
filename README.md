@@ -2,4 +2,7 @@ Formatter for REE templates.
 
 Ree templates are used by Reepolee for our Bun Apps.
 
-Install `reefmt` from https://github.com/reepolee/reefmt.
+## Requirements
+
+- **VS Code** ^1.125.0
+- **reefmt** — install from [github.com/reepolee/reefmt](https://github.com/reepolee/reefmt)
