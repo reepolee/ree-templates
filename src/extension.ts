@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import path from 'path';
+import * as path from 'path';
+import * as fs from 'fs';
 
 const execFileP = promisify(execFile);
 
@@ -177,6 +177,24 @@ const HELPER_COMPLETIONS: ReeCompletion[] = [
 	},
 ];
 
+
+function findGitRoot(startDir: string): string {
+	let dir = startDir;
+
+	while (true) {
+		if (fs.existsSync(path.join(dir, '.git'))) {
+			return dir;
+		}
+
+		const parent = path.dirname(dir);
+		if (parent === dir) break;
+
+		dir = parent;
+	}
+
+	return startDir;
+}
+
 // ─── Context Detection ──────────────────────────────────────────────────────
 
 function isInsideReeExpression(document: vscode.TextDocument, position: vscode.Position): boolean {
@@ -273,26 +291,31 @@ function registerIntelliSense(context: vscode.ExtensionContext) {
 
 export function activate(context: vscode.ExtensionContext) {
 	const formatter = vscode.languages.registerDocumentFormattingEditProvider('ree', {
-		async provideDocumentFormattingEdits(
-			document: vscode.TextDocument
-		): Promise<vscode.TextEdit[]> {
+		async provideDocumentFormattingEdits(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
 
 			const config = vscode.workspace.getConfiguration('ree');
 			const customPath = config.get<string>('reefmtPath', '');
 			const cmd = customPath || 'reefmt';
 
 			const filePath = document.fileName;
+			const fileDir = path.dirname(filePath);
 
-			// 👇 critical fix: config discovery now works correctly
-			const cwd = path.dirname(filePath);
+			// ✅ 1. Try workspace folder first (VS Code project root)
+			const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+
+			// ✅ 2. fallback: git root (what you actually want for config files)
+			const cwd =
+				workspaceFolder?.uri.fsPath ??
+				findGitRoot(fileDir) ??
+				fileDir;
 
 			try {
+				// run formatter in correct project context
 				await execFileP(cmd, [filePath], {
 					timeout: 15000,
 					cwd,
 				});
 
-				// read formatted result
 				const formatted = fs.readFileSync(filePath, 'utf8');
 
 				const fullRange = new vscode.Range(
@@ -304,12 +327,13 @@ export function activate(context: vscode.ExtensionContext) {
 			} catch (err: any) {
 				if (err.code === 'ENOENT') {
 					vscode.window.showWarningMessage(
-						'reefmt not found. Install reefmt or set "ree.reefmtPath" to the executable path.',
+						'reefmt not found. Install reefmt or set "ree.reefmtPath".',
 					);
 				} else {
 					const detail = err.stderr ?? err.message ?? String(err);
 					vscode.window.showErrorMessage(`reefmt failed: ${detail}`);
 				}
+
 				return [];
 			}
 		},
