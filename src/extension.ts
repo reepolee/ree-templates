@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import path from 'path';
 
 const execFileP = promisify(execFile);
 
@@ -272,19 +273,33 @@ function registerIntelliSense(context: vscode.ExtensionContext) {
 
 export function activate(context: vscode.ExtensionContext) {
 	const formatter = vscode.languages.registerDocumentFormattingEditProvider('ree', {
-		async provideDocumentFormattingEdits(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
+		async provideDocumentFormattingEdits(
+			document: vscode.TextDocument
+		): Promise<vscode.TextEdit[]> {
+
 			const config = vscode.workspace.getConfiguration('ree');
 			const customPath = config.get<string>('reefmtPath', '');
 			const cmd = customPath || 'reefmt';
 
+			const filePath = document.fileName;
+
+			// 👇 critical fix: config discovery now works correctly
+			const cwd = path.dirname(filePath);
+
 			try {
-				fs.writeFileSync(document.fileName, document.getText());
-				await execFileP(cmd, [document.fileName], { timeout: 15000 });
-				const formatted = fs.readFileSync(document.fileName, 'utf8');
+				await execFileP(cmd, [filePath], {
+					timeout: 15000,
+					cwd,
+				});
+
+				// read formatted result
+				const formatted = fs.readFileSync(filePath, 'utf8');
+
 				const fullRange = new vscode.Range(
 					document.positionAt(0),
 					document.positionAt(document.getText().length),
 				);
+
 				return [vscode.TextEdit.replace(fullRange, formatted)];
 			} catch (err: any) {
 				if (err.code === 'ENOENT') {
