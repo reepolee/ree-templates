@@ -15,7 +15,7 @@
 	},
 	"homepage": "https://github.com/reepolee/ree-templates#readme",
 	"engines": {
-		"vscode": "1.125.0"
+		"vscode": "^1.107.0"
 	},
 	"categories": [
 		"Programming Languages",
@@ -90,7 +90,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "25.9.3",
-		"@types/vscode": "1.125.0",
+		"@types/vscode": "1.107.0",
 		"@vscode/vsce": "3.9.2",
 		"esbuild": "0.28.1",
 		"typescript": "6.0.3"
