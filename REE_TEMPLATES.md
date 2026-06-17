@@ -54,37 +54,35 @@ Renders a template and returns an HTML `Response`.
 ```ts
 export type RenderOptions = {
 	data?: Record<string, any>;
-	helpers?: Record<string, any>;
 	status?: number;
 	headers?: Record<string, string>;
-	req?: BunRequest;
+	ctx?: RequestContext;
 };
 
 export async function render(template: string, options?: RenderOptions): Promise<Response>;
 ```
 
-| Option    | Type                     | Default | Description                                         |
-| --------- | ------------------------ | ------- | --------------------------------------------------- |
-| `data`    | `Record<string, any>`    | `{}`    | Template-specific data variables                    |
-| `helpers` | `Record<string, any>`    | `{}`    | Custom helper functions                             |
-| `status`  | `number`                 | `200`   | HTTP status code                                    |
-| `headers` | `Record<string, string>` | `{}`    | Additional response headers                         |
-| `req`     | `Request`                | —       | Incoming request (enables URL and language context) |
+| Option    | Type                     | Default | Description                                                         |
+| --------- | ------------------------ | ------- | ------------------------------------------------------------------- |
+| `data`    | `Record<string, any>`    | `{}`    | Template-specific data variables                                    |
+| `status`  | `number`                 | `200`   | HTTP status code                                                    |
+| `headers` | `Record<string, string>` | `{}`    | Additional response headers                                         |
+| `ctx`     | `RequestContext`         | —       | Request context from `create_ctx()` (enables URL, lang, user, etc.) |
 
 **Returns:** `Promise<Response>` with `Content-Type: text/html`.
 
 #### Automatic context injected into every render
 
-When `req` is provided, the following variables are automatically available in the template:
+When `ctx` is provided (from `create_ctx(req)`), the following variables are automatically available in the template:
 
-| Variable      | Source                                     | Description                           |
-| ------------- | ------------------------------------------ | ------------------------------------- |
-| `request_url` | `req.url` (pathname + search only)         | Relative URL, e.g. `/products?page=2` |
-| `lang`        | `X-Lang` header → `lang` cookie → `"en"`   | Active language code                  |
-| `locale`      | Derived from `lang` via `language_locales` | Locale string, e.g. `"sl-SI"`         |
-| `user`        | Session cookie → session store             | Logged-in user object or `null`       |
-| `toasts`      | Cookies with `toast-` prefix               | Array of pending toast notifications  |
-| `rendered_at` | `new Date().toLocaleString()`              | Render timestamp string               |
+| Variable      | Source                                 | Description                           |
+| ------------- | -------------------------------------- | ------------------------------------- |
+| `request_url` | `ctx.request_url` (pathname + search)  | Relative URL, e.g. `/products?page=2` |
+| `lang`        | `X-Lang` header → `lang` cookie → `en` | Active language code                  |
+| `locale`      | `ctx.locale`                           | Locale string, e.g. `"sl-SI"`         |
+| `user`        | Session resolved via `resolve_session` | Logged-in user object or `null`       |
+| `toasts`      | `ctx.toasts`                           | Array of pending toast notifications  |
+| `rendered_at` | ISO timestamp string                   | Render timestamp                      |
 
 In development mode (`is_dev: true`), two additional debug variables are injected:
 
@@ -130,6 +128,47 @@ yes_no(val: number, type?: "red_green" | "blank_green"): string
 </div>
 ```
 
+### `{#with expr} ... {/with}`
+
+Sets the scope context for property access inside the block. All variable references within the block resolve against the given expression's properties, similar to JavaScript's `with` statement.
+
+```ree
+{#with props.record}
+  <h1>{= title }</h1>
+  <p>{= description }</p>
+{/with}
+
+<!-- Equivalent to: -->
+<h1>{= props.record.title }</h1>
+<p>{= props.record.description }</p>
+```
+
+**Important:** Only direct variable names (not dotted expressions) resolve through the with context:
+
+```ree
+{#with props.nested}
+  {= name }        <!-- ✓ Resolves to props.nested.name -->
+  {= props.x }     <!-- ✗ Still uses the original props parameter, not props.nested.props.x -->
+{/with}
+```
+
+**Nesting and composition:**
+
+```ree
+{#with props.user}
+  <h2>{= name }</h2>
+  {#with address}
+    <p>{= street }</p>
+    <p>{= city }</p>
+  {/with}
+  {#each roles as role}
+    <span>{= role }</span>
+  {/each}
+{/with}
+```
+
+This is especially useful in CRUD-generated templates where you frequently access deeply nested properties like `props.columns`, `props.record`, or `props.fields`.
+
 #### `locale_date(date_string, locale?)`
 
 Formats a date string according to locale.
@@ -141,7 +180,7 @@ locale_date(dateString: string, locale?: string): string
 **Parameters:**
 
 - `date_string` - ISO date string (e.g., `"2024-01-15T10:30:00Z"`)
-- `locale` - Language code (default: `data.locale`, resolved from the active language)
+- `locale` - Language code (default: `props.locale`, resolved from the active language)
 
 **Template example:**
 
@@ -161,7 +200,7 @@ locale_time(dateString: string, locale?: string): string
 **Parameters:**
 
 - `date_string` - ISO date string
-- `locale` - Language code (default: `data.locale`)
+- `locale` - Language code (default: `props.locale`)
 
 **Template example:**
 
@@ -180,7 +219,7 @@ locale_ts(dateString: string, locale?: string): string
 **Parameters:**
 
 - `date_string` - ISO date string
-- `locale` - Language code (default: `data.locale`)
+- `locale` - Language code (default: `props.locale`)
 
 **Template example:**
 
@@ -199,7 +238,7 @@ display_currency(val: number, locale?: string, hide_zero?: boolean, symbol?: str
 **Parameters:**
 
 - `val` - Numeric value
-- `locale` - Locale for formatting (default: `data.locale`)
+- `locale` - Locale for formatting (default: `props.locale`)
 - `hide_zero` - If `true`, returns empty string for zero values (default: `false`)
 - `symbol` - Currency symbol (default: `"€"`)
 
@@ -221,7 +260,7 @@ display_percent(val: number, locale?: string): string
 **Parameters:**
 
 - `val` - Numeric value (e.g. `0.15` → `"15%"`)
-- `locale` - Locale for formatting (default: `data.locale`)
+- `locale` - Locale for formatting (default: `props.locale`)
 
 **Template example:**
 
@@ -275,10 +314,10 @@ When the current language is Slovenian (`sl`), `/auth/login` becomes `/avtentika
 ```ree
 <a href="{~ localized_path('/auth/login') }">Login</a>
 <a href="{~ localized_path('/auth/profile') }">Profile</a>
-<form method="POST" action="{~ localized_path(data.action) }">
+<form method="POST" action="{~ localized_path(props.action) }">
 ```
 
-See `localized-routes.md` for the full documentation on URL localization.
+See [AGENTS.md](AGENTS.md#url-localization) for documentation on URL localization via `route_name` keys in translation files.
 
 #### `is_current(page_url)`
 
@@ -301,7 +340,7 @@ Returns `"font-bold nav-item current"` if the current page matches, otherwise `"
 
 ### Custom Ad-hoc Helpers
 
-You can pass any custom helper function when rendering. Helpers are defined in the `helpers` object within the data parameter.
+You can pass custom helper functions in the `data` object. They become available directly in your template.
 
 #### Basic Example
 
@@ -309,20 +348,21 @@ You can pass any custom helper function when rendering. Helpers are defined in t
 
 ```typescript
 import { render } from "$lib/render";
+import { create_ctx } from "$lib/request_context";
 
 export async function GET_my_page(req: BunRequest) {
+	const ctx = await create_ctx(req, import.meta.dir);
 	return render("my-template", {
 		data: {
 			users: [
 				{ id: 1, name: "alice", role: "admin" },
 				{ id: 2, name: "bob", role: "user" },
 			],
-		},
-		helpers: {
+			// Custom helpers passed in data (no separate `helpers` option)
 			uppercase: (text) => text.toUpperCase(),
 			badge_color: (role) => (role === "admin" ? "bg-red-500" : "bg-blue-500"),
 		},
-		req,
+		ctx,
 	});
 }
 ```
@@ -331,7 +371,7 @@ export async function GET_my_page(req: BunRequest) {
 
 ```ree
 <table>
-  {#each data.users as user }
+  {#each props.users as user }
     <tr>
       <td>{= uppercase(user.name) }</td>
       <td><span class="{= badge_color(user.role) }">{= user.role }</span></td>
@@ -340,45 +380,28 @@ export async function GET_my_page(req: BunRequest) {
 </table>
 ```
 
-**Output:**
-
-```html
-<table>
-	<tr>
-		<td>ALICE</td>
-		<td><span class="bg-red-500">admin</span></td>
-	</tr>
-	<tr>
-		<td>BOB</td>
-		<td><span class="bg-blue-500">user</span></td>
-	</tr>
-</table>
-```
-
 #### Combining Multiple Helpers
 
 ```typescript
+const ctx = await create_ctx(req, import.meta.dir);
 return render("dashboard", {
-	data: { records: data },
-	helpers: {
+	data: {
+		records: data,
 		format_price: (amount) => `$${(amount / 100).toFixed(2)}`,
 		format_date: (date) => new Date(date).toLocaleDateString("en-US"),
 		status_badge: (status) => {
-			const colors = {
-				pending: "yellow",
-				active: "green",
-				inactive: "gray",
-			};
+			const colors = { pending: "yellow", active: "green", inactive: "gray" };
 			return `<span class="badge-${colors[status]}">${status}</span>`;
 		},
 	},
+	ctx,
 });
 ```
 
 **Template:**
 
 ```ree
-{#each data.records as record }
+{#each props.records as record }
   <div class="card">
     <h3>{= record.title }</h3>
     <p>Price: {~ format_price(record.amount) }</p>
@@ -390,24 +413,10 @@ return render("dashboard", {
 
 ### Helper Scope and Availability
 
-- **Helpers are functions** - They're called with `()` parentheses, not accessed as properties
-- **Helpers have access to parameters only** - They cannot access template variables directly
-- **Helpers are called during rendering** - Return values are injected into the output
-- **Custom helpers override defaults** - If you pass `yes_no` as a custom helper, it replaces the default
-
-#### Incorrect (won't work):
-
-```ree
-{~ uppercase() }  <!-- No argument passed -->
-{= helpers.uppercase(name) }  <!-- Helpers accessed as object -->
-```
-
-#### Correct:
-
-```ree
-{~ uppercase(record.name) }
-{= uppercase(data.name) }
-```
+- **Default helpers** (yes_no, locale_date, etc.) are always available — auto-injected by `render()`
+- **Custom helpers** are passed as functions in the `data` object, called with `()` syntax
+- **No separate `helpers` option** in `render()` — use `data` for custom helper functions
+- **Default helpers can be overridden** by passing a function with the same name in `data`
 
 ---
 
@@ -440,25 +449,29 @@ Throws if called before `initialize_render()`.
 
 ```ts
 import { render } from "$lib/render";
+import { create_ctx } from "$lib/request_context";
 
 export async function GET(req: BunRequest) {
-	return render("home/index", { data: { title: "Welcome" }, req });
+	const ctx = await create_ctx(req, import.meta.dir);
+	return render("home/index", { data: { title: "Welcome" }, ctx });
 }
 ```
 
 ### Passing a custom status code
 
 ```ts
+const ctx = await create_ctx(req, import.meta.dir);
 return render("errors/not-found", {
 	data: { message: "Page not found" },
 	status: 404,
-	req,
+	ctx,
 });
 ```
 
 ### Adding custom response headers
 
 ```ts
+const ctx = await create_ctx(req, import.meta.dir);
 return render("dashboard/index", {
 	data: { user },
 	status: 200,
@@ -466,7 +479,7 @@ return render("dashboard/index", {
 		"Cache-Control": "no-store",
 		"X-Frame-Options": "DENY",
 	},
-	req,
+	ctx,
 });
 ```
 
@@ -482,26 +495,26 @@ const emailHtml = await render_template("emails/welcome", { name: "Alice" });
 ### With multiple custom helpers
 
 ```typescript
+const ctx = await create_ctx(req, import.meta.dir);
 return render("products/list", {
 	data: {
 		products: await get_products(),
 		search_query: new URL(req.url).searchParams.get("q"),
-	},
-	helpers: {
+		// Custom helpers passed in data (no separate `helpers` option)
 		price: (cents) => `$${(cents / 100).toFixed(2)}`,
 		pub_date: (iso) => new Date(iso).toLocaleDateString(),
 		stock_class: (qty) => (qty > 0 ? "in-stock" : "out-of-stock"),
 		badge: (text, color = "blue") => `<span class="badge badge-${color}">${text}</span>`,
 	},
 	status: 200,
-	req,
+	ctx,
 });
 ```
 
 **Template:**
 
 ```ree
-{#each data.products as product }
+{#each props.products as product }
   <div class="product {= stock_class(product.quantity) }">
     <h2>{= product.name }</h2>
     <p>{~ price(product.price_cents) }</p>
@@ -517,10 +530,12 @@ return render("products/list", {
 
 ### Pattern 1: Simple Formatting
 
-Use helpers for one-off transformations of data.
+Use helpers (passed in `data`) for one-off transformations of props.
 
 ```typescript
-helpers: {
+// In route handler, pass helper in data:
+data: {
+  records: data,
   shout: (text) => text.toUpperCase() + "!!!",
 }
 ```
@@ -534,7 +549,8 @@ helpers: {
 Use helpers to return different output based on a value.
 
 ```typescript
-helpers: {
+data: {
+  records: data,
   account_status: (days_active) => {
     if (days_active < 7) return '<span class="new">New</span>';
     if (days_active < 30) return '<span class="active">Active</span>';
@@ -552,10 +568,10 @@ helpers: {
 Process data before display using helper logic.
 
 ```typescript
-helpers: {
+data: {
+  records: data,
   initials: (first_name, last_name) =>
     (first_name[0] + last_name[0]).toUpperCase(),
-
   avatar_color: (user_id) => {
     const colors = ["red", "blue", "green", "yellow", "purple"];
     return colors[user_id % colors.length];
@@ -571,10 +587,11 @@ helpers: {
 
 ### Pattern 4: Combining Default + Custom Helpers
 
-You can use both default helpers and custom ones together.
+You can use both default helpers and custom ones together. Default helpers are always available without passing them.
 
 ```typescript
-helpers: {
+data: {
+  records: data,
   status_with_date: (status, date) => {
     const status_html = yes_no(status === "active", "red_green");
     const date_str = locale_date(date);
@@ -582,6 +599,139 @@ helpers: {
   },
 }
 ```
+
+---
+
+## Best Practices — Using `{#with}`
+
+### When to use `{#with}`
+
+Wrap sections where you access the same `props.*` sub-object multiple times. A good rule of thumb: **3+ repeated accesses** on the same sub-object justify a `{#with}` block.
+
+```ree
+<!-- ❌ Verbose: props.ui repeated 6 times -->
+<h1>{= props.ui.title }</h1>
+<p>{= props.ui.description }</p>
+<h2>{= props.ui.mission_title }</h2>
+<p>{= props.ui.mission_text }</p>
+<h2>{= props.ui.team_title }</h2>
+<p>{= props.ui.team_text }</p>
+
+<!-- ✅ Clean: one {#with} eliminates 6 prefixes -->
+{#with props.ui}
+  <h1>{= title }</h1>
+  <p>{= description }</p>
+  <h2>{= mission_title }</h2>
+  <p>{= mission_text }</p>
+  <h2>{= team_title }</h2>
+  <p>{= team_text }</p>
+{/with}
+```
+
+### `delete` is a JavaScript keyword
+
+You **cannot** use `{= delete }` inside a `{#with}` block — `delete` is a reserved word in JavaScript and using it as a bare identifier causes a `SyntaxError` at template compile time. Always use the full `props.actions.delete` path:
+
+```ree
+<!-- ❌ Breaks: `delete` is a JS keyword -->
+{#with props.actions}
+  <h2>{= delete}</h2>
+{/with}
+
+<!-- ✅ Works: explicit property access -->
+{#with props.actions}
+  <h2>{= props.actions.delete}</h2>  <!-- `delete` after a dot is fine -->
+  <button>{= abort_delete}</button>  <!-- non-keywords can be bare -->
+  <button>{= confirm_delete}</button>
+{/with}
+```
+
+Other JS keywords to watch for: `class`, `default`, `new`, `return`, `switch`, `this`, `throw` — if you use any of these as translation/action keys, keep them as explicit property paths inside `{#with}`.
+
+### Local variables always win
+
+Local variables (including destructured `props`, inner `{#each}` loop variables, and helpers) always take precedence over `{#with}` context properties. This means you can mix `{#with}` with other blocks safely:
+
+```ree
+{#with props.actions}
+  {= save }
+  {= save_close }
+
+  {#if (props.record.id) && props.enable_delete }
+    <!-- props is a local var → resolves correctly, not shadowed by with context -->
+    <button>{= props.actions.delete}</button>
+  {/if}
+{/with}
+```
+
+Helpers (`yes_no`, `localized_path`, `display_currency`, etc.) are injected as local variables at function scope, so they work normally inside `{#with}` blocks.
+
+### Composition with `{#if}` and `{#each}`
+
+`{#with}` nests cleanly inside control flow blocks:
+
+```ree
+{#each props.records as record}
+  {#with record}
+    <tr>
+      <td>{= id }</td>
+      <td>{= name }</td>
+    </tr>
+  {/with}
+{:else}
+  <p>{= props.ui.no_records }</p>
+{/each}
+```
+
+### Nested `{#with}` blocks
+
+You can nest `{#with}` blocks — the inner scope shadows the outer one for matching properties:
+
+```ree
+{#with props.__child.ui__}
+  <h2>{= new_title }</h2>
+
+  {#with props.actions}
+    <button>{= save}</button>      <!-- props.actions.save -->
+    <button>{= cancel}</button>    <!-- props.actions.cancel -->
+  {/with}
+{/with}
+```
+
+### CRUD template pattern — `{#with props}` + `{#with record}`
+
+Generated CRUD index templates use a two-tier `{#with}` pattern to keep headers and cells clean. The headers section is wrapped with `{#with props}`, and each data row is wrapped with `{#with record}` (where `record` is the `{#each}` loop variable):
+
+```ree
+<!-- HEADERS: wrapped with {#with props} → bare columns/labels names -->
+{#with props}
+  <div>ID</div>
+  <div class="{= columns.name.class }">{= labels.name }</div>
+  <div class="{= columns.email.class }">{= labels.email }</div>
+{/with}
+
+<!-- ROWS: each record wrapped with {#with record} → bare field names -->
+{#each props.records as record}
+  {#with record}
+    <div>{= id }</div>
+    <div class="{= props.columns.name.class }">{= name }</div>
+    <div class="{= props.columns.email.class }">{= email }</div>
+  {/with}
+{/each}
+```
+
+Key points:
+
+- **Headers** (`{#with props}`): `{= columns.name.class }` resolves as `props.columns.name.class`, `{= labels.name }` as `props.labels.name`.
+- **Cells** (`{#with record}`): `{= name }` resolves as `record.name`. The class still uses the full `{= props.columns.name.class }` path because `props` is a local variable that takes precedence over the with context.
+- **Nested child grids**: Child headers also use `{#with props}`, child rows use `{#with child}` for their cells — same pattern, different loop variable.
+- **Generator alignment**: The `render_field_header()` function emits bare `{= columns.* }` / `{= labels.* }` (no `props.` prefix), expecting the `{#with props}` wrapper. The `render_field_cell()` function emits bare `{= name }` field names (no `record.` prefix), expecting the `{#with record}` wrapper.
+
+### When NOT to use `{#with}`
+
+- **One-off accesses** — a single `props.xxx.yyy` doesn't justify wrapping
+- **Mixed sub-objects** — if a section accesses `props.ui.x`, `props.actions.y`, and `props.record.z` equally, one `{#with}` can't simplify all three
+- **Inside `<script>` tags with mixed references** — the overhead of tracking scope across long script blocks isn't worth it; keep full paths in scripts
 
 ---
 
@@ -670,14 +820,82 @@ Declares the layout for the current template. The rendered body of the current t
 
 Includes another template inline. The included template receives a merged copy of the current data plus any extra data object passed as the second argument.
 
-#### Component shorthand
+#### Component includes
+
+**Always use ReeTag (`<ree-tag></ree-tag>`) for component includes.** For cases where the props object itself must be computed (e.g. spreading additional fields), use `{#include("$components/name", computedProps)}` directly.
+
+**ReeTag — `<tag-name>` custom-element syntax:**
 
 ```
-{@componentName(props) }
-{@card({ title, href }) }
+<app-banner type="red">{= props.form_errors }</app-banner>
+<product-card product={= product } badge={= is_new ? 'NEW' : '' }>
+	{= product.name }
+</product-card>
 ```
 
-Shorthand for `{#include('$components/componentName', props) }`. Components are resolved from the `components/` directory at the project root.
+Any tag whose name contains **at least one hyphen** is treated as a component invocation. The pre-processor converts it internally to `{#include("$components/tag-name", {children: <compiled slot>, attributes: { "type": "red" }})}`.
+
+- Slot content is compiled in the parent's scope and passed as `props.children`
+- HTML attributes are passed as `props.attributes` — template expressions `{= expr }` and `{~ expr }` inside attribute values ARE compiled, evaluated at render time
+- Tags **without** a hyphen (e.g. `<banner>`) are treated as literal HTML and passed through unprocessed
+- Reads more like HTML — components can be authored and read in a natural slot/content style
+- The component receives `children` and reads from `props.children` instead of digging into `attributes.text`
+
+**Direct `{#include(...)}` — for computed prop objects:**
+
+```
+{#include("$components/card", { title, href, ...extra_props })}
+{#include("$components/badge", { label: get_badge_label(record), color: get_badge_color(record) })}
+```
+
+Use this form when the props object itself must be built dynamically (computed keys, spread operator, conditional inclusion of fields). For static attributes, prefer ReeTag — it reads more like HTML and the component receives `children` naturally.
+
+#### `<auto-complete>` component
+
+The `<auto-complete>` component (`components/auto-complete.ree`) renders a searchable dropdown for foreign key fields with live search, keyboard navigation, and autoscroll.
+
+**Required attributes** (from generated forms):
+
+| Attribute    | Description                          | Example                            |
+| ------------ | ------------------------------------ | ---------------------------------- |
+| `field-name` | Field name for the hidden input      | `legal_entity_registration_number` |
+| `fk-table`   | Foreign key table for search queries | `legal_entities`                   |
+| `fk-column`  | Foreign key column name              | `registration_number`              |
+| `base-url`   | Base URL for the options endpoint    | `/partners/legal-entities`         |
+
+**Optional attributes:**
+
+| Attribute | Description                                  | Default |
+| --------- | -------------------------------------------- | ------- |
+| `rows`    | Number of visible rows (dropdown max-height) | `6`     |
+
+**Example — generated form field:**
+
+```html
+<auto-complete
+	field-name="legal_entity_registration_number"
+	fk-table="legal_entities"
+	fk-column="registration_number"
+	base-url="/partners/legal-entities"
+	rows="8"
+></auto-complete>
+```
+
+The component inherits `props.labels`, `props.record`, and `props.selectors` from the parent render scope. The hidden input value is pre-populated from `props.record.{fieldName}`, and the search input is pre-populated from `props.record.{fieldName}_display` (set by the edit handler).
+
+**Direct usage in any template:**
+
+```ree
+<auto-complete
+	field-name="company_id"
+	fk-table="companies"
+	fk-column="id"
+	base-url="/admin/companies"
+	rows="10"
+></auto-complete>
+```
+
+Just `rows` is enough to control dropdown height — `max-height` is computed as `rows × 32px`. If both `rows` and `max-height` attributes are set, `max-height` takes precedence.
 
 ### Path Resolution
 
@@ -718,7 +936,7 @@ await engine.writeOutput("dist/index.html", html);
 
 ```ree
 <nav>
-  {#each data.menuItems as item }
+  {#each props.menuItems as item }
     <a href="{= item.url }" {#if item.active }class="active"{/if}>
       {= item.label }
     </a>
@@ -729,7 +947,7 @@ await engine.writeOutput("dist/index.html", html);
 **Iterating over an object**
 
 ```ree
-{#each data.settings as value, i, key }
+{#each props.settings as value, i, key }
   <div>{= key }: {= value }</div>
 {/each}
 ```
@@ -739,11 +957,11 @@ For objects, `item` is the value, `index` is the numeric position, and `key` is 
 **Pre-computing values before output**
 
 ```ree
-{{ const sorted = data.posts.sort((a, b) => b.date - a.date) }}
+{{ const sorted = props.posts.sort((a, b) => b.date - a.date) }}
 {{ const recent = sorted.slice(0, 5) }}
 
 {#each recent as post }
-  {@post-card({ post })}
+  <post-card post={= post }></post-card>
 {/each}
 ```
 
@@ -751,7 +969,7 @@ For objects, `item` is the value, `index` is the numeric position, and `key` is 
 
 ```ree
 <form>
-  {#each data.fields as field }
+  {#each props.fields as field }
     <div class="field">
       <label>{= field.label }</label>
       <input name="{= field.name }" value="{= field.value || '' }">
@@ -784,7 +1002,7 @@ For objects, `item` is the value, `index` is the numeric position, and `key` is 
 
 ### Template Issues
 
-**Unmatched braces / syntax error** — CSS and JS object literals like `{ color: red }` won't be parsed as tags since the engine only recognises `{=`, `{~`, `{#`, `{:`, `{/`, `{@`, and `{{`. If you see unexpected output, check for a stray tag prefix.
+**Unmatched braces / syntax error** — CSS and JS object literals like `{ color: red }` won't be parsed as tags since the engine only recognises `{=`, `{~`, `{#`, `{:`, `{/`, and `{{`. If you see unexpected output, check for a stray tag prefix.
 
 **Template file not found** — the path is resolved relative to the `views` directory (or the alias root for `$components/` etc.). Verify the file exists without the extension, e.g. `engine.render("pages/home")` maps to `<views>/pages/home.ree`.
 
@@ -796,16 +1014,16 @@ For objects, `item` is the value, `index` is the numeric position, and `key` is 
 
 ### Helper Issues
 
-**"Helper is not defined"** — You forgot to pass the helper in the `helpers` object when calling `render()`.
+**"[function] is not defined"** — The helper function isn't available in the template. If it's a custom helper, make sure you pass it in the `data` object. Default helpers (yes_no, locale_date, etc.) are auto-injected.
 
 ```typescript
-// ❌ WRONG - helper not passed
-return render("template", { records: data });
-
-// ✅ CORRECT - helper passed
+// ✅ CORRECT - custom helper passed in data
 return render("template", {
-	records: data,
-	helpers: { uppercase: (x) => x.toUpperCase() },
+	data: {
+		records: data,
+		uppercase: (x) => x.toUpperCase(),
+	},
+	ctx,
 });
 ```
 
@@ -821,13 +1039,13 @@ return render("template", {
 
 ```typescript
 // ❌ Helper expects string but receives number
-helpers: {
-	shout: (text) => text.toUpperCase() + "!!!"; // Will fail if text is a number
+data: {
+	shout: (text) => text.toUpperCase() + "!!!", // Will fail if text is a number
 }
 
 // ✅ Better - handle multiple types
-helpers: {
-	shout: (val) => String(val).toUpperCase() + "!!!";
+data: {
+	shout: (val) => String(val).toUpperCase() + "!!!",
 }
 ```
 
@@ -841,38 +1059,19 @@ helpers: {
 {~ format_name(record.user_name) }
 ```
 
-**Data not visible in template** — Check that you're passing it in the `data` object, not in `helpers`.
-
-```typescript
-// ❌ WRONG - helpers should only contain functions
-return render("template", {
-	helpers: {
-		records: data, // Don't put data here
-	},
-});
-
-// ✅ CORRECT - data goes in the main object
-return render("template", {
-	records: data,
-	helpers: {
-		uppercase: (x) => x.toUpperCase(),
-	},
-});
-```
-
 ---
 
 ## Global Template Variables (`server.ts`)
 
 `base_data` in `server.ts` is passed to `initialize_render()` and merged into **every** template render automatically. No need to pass these values per-route.
 
-| Variable                   | Type / Value                         | Description                                         |
-| -------------------------- | ------------------------------------ | --------------------------------------------------- |
-| `site_name`                | `string` — `"Reebun App v<version>"` | App name with version from `package.json`           |
-| `year`                     | `number` — current year              | Useful for copyright footers                        |
-| `is_dev`                   | `boolean`                            | `true` when server started with `--dev`             |
-| `url(p)`                   | `(p: string) => string`              | Ensures a path starts with `/`; use in `href` attrs |
-| `menu_entries_crud_routes` | `CrudRoute[]`                        | CRUD routes flagged with `is_menu_entry: true`      |
+| Variable                   | Type / Value                           | Description                                         |
+| -------------------------- | -------------------------------------- | --------------------------------------------------- |
+| `site_name`                | `string` — `"reepolee App v<version>"` | App name with version from `package.json`           |
+| `year`                     | `number` — current year                | Useful for copyright footers                        |
+| `is_dev`                   | `boolean`                              | `true` when server started with `--dev`             |
+| `url(p)`                   | `(p: string) => string`                | Ensures a path starts with `/`; use in `href` attrs |
+| `menu_entries_crud_routes` | `CrudRoute[]`                          | CRUD routes flagged with `is_menu_entry: true`      |
 
 These merge with any per-render `data` argument. Per-render data takes precedence over `base_data`.
 
@@ -940,14 +1139,14 @@ When `is_dev` is `true`:
 ```ree
 {#layout('layouts/main', { pageTitle: 'Product Catalog' })}
 
-{{ const featured = data.products.filter(p => p.featured) }}
-{{ const regular = data.products.filter(p => !p.featured) }}
+{{ const featured = props.products.filter(p => p.featured) }}
+{{ const regular = props.products.filter(p => !p.featured) }}
 
 <section class="featured">
   <h2>Featured Products</h2>
   <div class="grid">
     {#each featured as product, index }
-      {@product-card({ product, badge: index === 0 ? 'NEW' : null })}
+      <product-card badge={= index === 0 ? 'NEW' : '' }>{= product.name }</product-card>
     {:else}
       <p>No featured products</p>
     {/each}
@@ -959,7 +1158,7 @@ When `is_dev` is `true`:
   {#if regular.length > 0 }
     <div class="grid">
       {#each regular as product }
-        {@product-card({ product })}
+        <product-card product={= product }></product-card>
       {/each}
     </div>
   {:else}
@@ -967,7 +1166,7 @@ When `is_dev` is `true`:
   {/if}
 </section>
 
-{@newsletter-signup()}
+<newsletter-signup></newsletter-signup>
 ```
 
 ---
@@ -976,37 +1175,30 @@ When `is_dev` is `true`:
 
 ```typescript
 import { render } from "$lib/render";
-import { get_products } from "$lib/db";
+import { create_ctx } from "$lib/request_context";
 
 export async function GET_products(req: BunRequest) {
+	const ctx = await create_ctx(req, import.meta.dir);
 	const products = await get_products();
 
 	return render("products/list", {
 		data: {
 			products,
 			page_title: "Our Products",
-		},
-		helpers: {
-			// Format money (cents to dollars)
+			// Custom helpers passed in data (no separate `helpers` option)
 			price: (cents) => `$${(cents / 100).toFixed(2)}`,
-
-			// Format date
 			publish_date: (iso) => new Date(iso).toLocaleDateString("en-US"),
-
-			// Stock status with conditional styling
 			stock_badge: (quantity) => {
 				if (quantity === 0) return '<span class="badge-red">Out of Stock</span>';
 				if (quantity < 5) return '<span class="badge-yellow">Low Stock</span>';
 				return '<span class="badge-green">In Stock</span>';
 			},
-
-			// Category color
 			category_color: (category) => {
 				const colors = { electronics: "blue", clothing: "pink", books: "purple" };
 				return colors[category] || "gray";
 			},
 		},
-		req,
+		ctx,
 	});
 }
 ```
@@ -1016,10 +1208,10 @@ export async function GET_products(req: BunRequest) {
 ```ree
 {#layout("layouts/shop")}
 
-<h1>{= data.page_title }</h1>
+<h1>{= props.page_title }</h1>
 
 <div class="product-grid">
-  {#each data.products as product }
+  {#each props.products as product }
     <div class="product-card category-{= category_color(product.category) }">
       <h3>{= product.name }</h3>
       <p class="description">{= product.description }</p>

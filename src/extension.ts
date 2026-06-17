@@ -100,10 +100,16 @@ const TAG_COMPLETIONS: ReeCompletion[] = [
 		docs: 'Raw JavaScript block. Executed during template compilation.',
 	},
 	{
-		label: '{@component}',
-		detail: 'Component include',
-		snippet: '{@$1($2)}',
-		docs: "Component shorthand for {#include('$components/name', props)}.",
+		label: '{#with}',
+		detail: 'Block: with scope',
+		snippet: '{#with $1}\n\t$0\n{/with}',
+		docs: 'Sets the scope context for property access inside the block. All variable references within the block resolve against the given expression\'s properties.',
+	},
+	{
+		label: '{/with}',
+		detail: 'Close: with',
+		snippet: '{/with}',
+		docs: 'Closes an {#with} block.',
 	},
 ];
 

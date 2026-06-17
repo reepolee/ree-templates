@@ -177,7 +177,7 @@
 			"patterns": [
 				{
 					"name": "keyword.control.ree",
-					"match": "\\b(if|else|each|unless|await)\\b"
+					"match": "\\b(if|else|each|unless|await|with)\\b"
 				},
 				{
 					"name": "keyword.control.ree",
