@@ -85,13 +85,19 @@
 		"watch": "node esbuild.js --watch & tsc --noEmit --watch --project tsconfig.json",
 		"vscode:prepublish": "npm run package",
 		"package": "npm run check-types && node esbuild.js --production",
+		"ncu": "ncu -u -t minor && ncu",
 		"bundle": "git push && pnpm version patch && git push &&  npm run package && vsce package --no-update-package-json"
 	},
 	"devDependencies": {
-		"@types/node": "^25.0.3",
-		"@types/vscode": "^1.107.0",
-		"@vscode/vsce": "^3.7.1",
-		"esbuild": "^0.27.2",
-		"typescript": "^5.9.3"
+		"@types/node": "25.9.3",
+		"@types/vscode": "1.125.0",
+		"@vscode/vsce": "3.9.2",
+		"esbuild": "0.28.1",
+		"typescript": "6.0.3"
+	},
+	"allowScripts": {
+		"keytar@7.9.0": true,
+		"esbuild@0.28.1": true,
+		"@vscode/vsce-sign@2.0.9": true
 	}
 }
