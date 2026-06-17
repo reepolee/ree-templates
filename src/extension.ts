@@ -1,12 +1,9 @@
 import * as vscode from 'vscode';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const execFileP = promisify(execFile);
-
-// ─── IntelliSense Data ──────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ReeCompletion {
 	label: string;
@@ -15,102 +12,32 @@ interface ReeCompletion {
 	docs: string;
 }
 
+// ─── Completion Data ────────────────────────────────────────────────────────
+
 const TAG_COMPLETIONS: ReeCompletion[] = [
 	{
 		label: '{#if}',
 		detail: 'Block: if condition',
 		snippet: '{#if $1}\n\t$0\n{/if}',
-		docs: 'Conditional block. Renders content when the condition is truthy.',
+		docs: 'Conditional block. Renders content when condition is truthy.',
 	},
 	{
 		label: '{:else}',
 		detail: 'Block: else branch',
 		snippet: '{:else}',
-		docs: 'Else branch for {#if} or {#each} blocks.',
+		docs: 'Else branch for conditional blocks.',
 	},
 	{
 		label: '{/if}',
 		detail: 'Close: if',
 		snippet: '{/if}',
-		docs: 'Closes an {#if} block.',
+		docs: 'Closes an if block.',
 	},
 	{
 		label: '{#each}',
 		detail: 'Block: each iteration',
 		snippet: '{#each $1 as $2}\n\t$0\n{/each}',
-		docs: 'Iteration block. Loops over an array or object.',
-	},
-	{
-		label: '{#each index}',
-		detail: 'Block: each with index',
-		snippet: '{#each $1 as $2, $3}\n\t$0\n{/each}',
-		docs: 'Iteration block with index variable.',
-	},
-	{
-		label: '{#each key}',
-		detail: 'Block: each with index and key',
-		snippet: '{#each $1 as $2, $3, $4}\n\t$0\n{/each}',
-		docs: 'Iteration block with index and key variables (for objects).',
-	},
-	{
-		label: '{/each}',
-		detail: 'Close: each',
-		snippet: '{/each}',
-		docs: 'Closes an {#each} block.',
-	},
-	{
-		label: '{#layout}',
-		detail: 'Block: layout wrapper',
-		snippet: "{#layout('$1')}\n$0",
-		docs: 'Layout declaration. Wraps the template body in a layout file.',
-	},
-	{
-		label: '{#layout with data}',
-		detail: 'Block: layout with data',
-		snippet: "{#layout('$1', { $2 })}\n$0",
-		docs: 'Layout declaration with extra data passed to the layout.',
-	},
-	{
-		label: '{#include}',
-		detail: 'Block: include partial',
-		snippet: "{#include('$1')}",
-		docs: 'Include another template inline. Receives current data.',
-	},
-	{
-		label: '{#include with data}',
-		detail: 'Block: include with data',
-		snippet: "{#include('$1', { $2 })}",
-		docs: 'Include another template with extra data object.',
-	},
-	{
-		label: '{= }',
-		detail: 'Escaped output',
-		snippet: '{= $1 }',
-		docs: 'Escaped HTML output. Converts & < > " \' to HTML entities.',
-	},
-	{
-		label: '{~ }',
-		detail: 'Unescaped output',
-		snippet: '{~ $1 }',
-		docs: 'Unescaped / raw HTML output. Use only with trusted content.',
-	},
-	{
-		label: '{{ }}',
-		detail: 'Raw JavaScript',
-		snippet: '{{ $1 }}',
-		docs: 'Raw JavaScript block. Executed during template compilation.',
-	},
-	{
-		label: '{#with}',
-		detail: 'Block: with scope',
-		snippet: '{#with $1}\n\t$0\n{/with}',
-		docs: 'Sets the scope context for property access inside the block. All variable references within the block resolve against the given expression\'s properties.',
-	},
-	{
-		label: '{/with}',
-		detail: 'Close: with',
-		snippet: '{/with}',
-		docs: 'Closes an {#with} block.',
+		docs: 'Iteration block over arrays or objects.',
 	},
 ];
 
@@ -119,72 +46,23 @@ const HELPER_COMPLETIONS: ReeCompletion[] = [
 		label: 'url',
 		detail: '(path: string) => string',
 		snippet: "url('$1')",
-		docs: 'Ensures a path starts with `/`. Use in href attributes.',
-	},
-	{
-		label: 'localized_path',
-		detail: '(canonicalPath: string) => string',
-		snippet: "localized_path('$1')",
-		docs: 'Localizes a canonical URL path to the current language.',
-	},
-	{
-		label: 'is_current',
-		detail: '(pageUrl: string) => string',
-		snippet: "is_current('$1')",
-		docs: 'Returns "font-bold nav-item current" if the URL matches the current page, otherwise "nav-item".',
-	},
-	{
-		label: 'yes_no',
-		detail: '(val: number, type?: "blank_green" | "red_green") => string',
-		snippet: 'yes_no($1)',
-		docs: 'Displays a boolean/numeric value as a styled "Yes" or "No". Default: "blank_green".',
+		docs: 'Ensures path starts with /',
 	},
 	{
 		label: 'locale_date',
-		detail: '(dateString: string, locale?: string) => string',
+		detail: '(date: string) => string',
 		snippet: 'locale_date($1)',
-		docs: 'Formats a date string according to locale.',
-	},
-	{
-		label: 'locale_time',
-		detail: '(dateString: string, locale?: string) => string',
-		snippet: 'locale_time($1)',
-		docs: 'Formats a date string\'s time portion according to locale.',
-	},
-	{
-		label: 'locale_ts',
-		detail: '(dateString: string, locale?: string) => string',
-		snippet: 'locale_ts($1)',
-		docs: 'Formats a date string as full date+time according to locale.',
-	},
-	{
-		label: 'iso_date',
-		detail: '(dateString: string) => string',
-		snippet: 'iso_date($1)',
-		docs: 'Converts a date to ISO format string (e.g. for <time datetime>).',
-	},
-	{
-		label: 'display_currency',
-		detail: '(val: number, locale?: string, hide_zero?: boolean, symbol?: string) => string',
-		snippet: 'display_currency($1)',
-		docs: 'Formats a number as currency. Default symbol: €.',
-	},
-	{
-		label: 'display_percent',
-		detail: '(val: number, locale?: string) => string',
-		snippet: 'display_percent($1)',
-		docs: 'Formats a number as percentage (e.g. 0.15 → "15%").',
+		docs: 'Formats date in locale format.',
 	},
 ];
 
+// ─── Git Root Resolver ──────────────────────────────────────────────────────
 
 function findGitRoot(startDir: string): string {
 	let dir = startDir;
 
 	while (true) {
-		if (fs.existsSync(path.join(dir, '.git'))) {
-			return dir;
-		}
+		if (fs.existsSync(path.join(dir, '.git'))) return dir;
 
 		const parent = path.dirname(dir);
 		if (parent === dir) break;
@@ -195,15 +73,22 @@ function findGitRoot(startDir: string): string {
 	return startDir;
 }
 
-// ─── Context Detection ──────────────────────────────────────────────────────
+// ─── REE Expression Detection ───────────────────────────────────────────────
 
-function isInsideReeExpression(document: vscode.TextDocument, position: vscode.Position): boolean {
-	const text = document.getText(new vscode.Range(new vscode.Position(0, 0), position));
+function isInsideReeExpression(
+	document: vscode.TextDocument,
+	position: vscode.Position
+): boolean {
+	const text = document.getText(
+		new vscode.Range(new vscode.Position(0, 0), position)
+	);
 
 	let lastIdx = -1;
 	let lastMatch = '';
+
 	const openerRe = /\{(?:[#=~@/:]|\{)/g;
 	let m: RegExpExecArray | null;
+
 	while ((m = openerRe.exec(text)) !== null) {
 		lastIdx = m.index;
 		lastMatch = m[0];
@@ -212,76 +97,112 @@ function isInsideReeExpression(document: vscode.TextDocument, position: vscode.P
 	if (lastIdx === -1) return false;
 
 	const after = text.slice(lastIdx);
-	let closerAt = -1;
 
 	if (lastMatch === '{{') {
-		closerAt = after.indexOf('}}', 2);
-	} else {
-		closerAt = after.indexOf('}', 2);
+		return after.indexOf('}}', 2) === -1;
 	}
 
-	return closerAt === -1;
+	return after.indexOf('}', 2) === -1;
 }
 
-// ─── Completion Builders ────────────────────────────────────────────────────
+// ─── Completion Builder ─────────────────────────────────────────────────────
 
 function buildItems(completions: ReeCompletion[]): vscode.CompletionItem[] {
 	return completions.map((c) => {
-		const item = new vscode.CompletionItem(c.label, vscode.CompletionItemKind.Snippet);
+		const item = new vscode.CompletionItem(
+			c.label,
+			vscode.CompletionItemKind.Snippet
+		);
+
 		item.insertText = new vscode.SnippetString(c.snippet);
 		item.detail = c.detail;
 		item.documentation = new vscode.MarkdownString(c.docs);
 		item.sortText = '0_' + c.label;
+
 		return item;
 	});
 }
 
-// ─── Provider Registration ──────────────────────────────────────────────────
+// ─── Formatter (spawn-based, stdin/stdout) ──────────────────────────────────
+
+function runReefmt(cmd: string, cwd: string, input: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const p = spawn(cmd, ['--stdin'], {
+			cwd,
+			stdio: ['pipe', 'pipe', 'pipe'],
+		});
+
+		let out = '';
+		let err = '';
+
+		p.stdout.on('data', (d) => (out += d.toString()));
+		p.stderr.on('data', (d) => (err += d.toString()));
+
+		p.on('close', (code) => {
+			if (code === 0) resolve(out);
+			else reject(new Error(err || `reefmt exited with code ${code}`));
+		});
+
+		p.stdin.write(input);
+		p.stdin.end();
+	});
+}
+
+// ─── IntelliSense Registration ──────────────────────────────────────────────
 
 function registerIntelliSense(context: vscode.ExtensionContext) {
 	const tagProvider = vscode.languages.registerCompletionItemProvider(
 		{ language: 'ree' },
 		{
-			provideCompletionItems(document: vscode.TextDocument, position: vscode.Position) {
-				const linePrefix = document.lineAt(position).text.slice(0, position.character);
-				if (linePrefix.endsWith('{{')) return undefined;
-				if (!linePrefix.endsWith('{')) return undefined;
-				if (/\{[#=~@/:]/.test(linePrefix.slice(-2))) return undefined;
+			provideCompletionItems(document, position) {
+				const line = document.lineAt(position).text.slice(0, position.character);
+
+				if (!line.endsWith('{')) return;
+				if (line.endsWith('{{')) return;
+				if (/\{[#=~@/:]/.test(line.slice(-2))) return;
+
 				return buildItems(TAG_COMPLETIONS);
 			},
 		},
-		'{',
+		'{'
 	);
 
 	const helperProvider = vscode.languages.registerCompletionItemProvider(
 		{ language: 'ree' },
 		{
-			provideCompletionItems(document: vscode.TextDocument, position: vscode.Position) {
-				if (!isInsideReeExpression(document, position)) return undefined;
+			provideCompletionItems(document, position) {
+				if (!isInsideReeExpression(document, position)) return;
 				return buildItems(HELPER_COMPLETIONS);
 			},
-		},
+		}
 	);
 
 	const hoverProvider = vscode.languages.registerHoverProvider(
 		{ language: 'ree' },
 		{
-			provideHover(document: vscode.TextDocument, position: vscode.Position) {
-				if (!isInsideReeExpression(document, position)) return undefined;
+			provideHover(document, position) {
+				if (!isInsideReeExpression(document, position)) return;
 
-				const wordRange = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/);
-				if (!wordRange) return undefined;
+				const range = document.getWordRangeAtPosition(
+					position,
+					/[a-zA-Z_][a-zA-Z0-9_]*/
+				);
 
-				const word = document.getText(wordRange);
+				if (!range) return;
+
+				const word = document.getText(range);
 				const helper = HELPER_COMPLETIONS.find((h) => h.label === word);
-				if (!helper) return undefined;
+				if (!helper) return;
 
 				const md = new vscode.MarkdownString();
-				md.appendMarkdown(`**${helper.label}**\n\n\`${helper.detail}\`\n\n${helper.docs}`);
+				md.appendMarkdown(
+					`**${helper.label}**\n\n\`${helper.detail}\`\n\n${helper.docs}`
+				);
 				md.isTrusted = true;
-				return new vscode.Hover(md, wordRange);
+
+				return new vscode.Hover(md, range);
 			},
-		},
+		}
 	);
 
 	context.subscriptions.push(tagProvider, helperProvider, hoverProvider);
@@ -290,58 +211,48 @@ function registerIntelliSense(context: vscode.ExtensionContext) {
 // ─── Activation ─────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext) {
-	const formatter = vscode.languages.registerDocumentFormattingEditProvider('ree', {
-		async provideDocumentFormattingEdits(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
+	const formatter = vscode.languages.registerDocumentFormattingEditProvider(
+		'ree',
+		{
+			async provideDocumentFormattingEdits(document) {
+				const config = vscode.workspace.getConfiguration('ree');
+				const cmd = config.get<string>('reefmtPath', '') || 'reefmt';
 
-			const config = vscode.workspace.getConfiguration('ree');
-			const customPath = config.get<string>('reefmtPath', '');
-			const cmd = customPath || 'reefmt';
+				const fileDir = path.dirname(document.fileName);
 
-			const filePath = document.fileName;
-			const fileDir = path.dirname(filePath);
-
-			// ✅ 1. Try workspace folder first (VS Code project root)
-			const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-
-			// ✅ 2. fallback: git root (what you actually want for config files)
-			const cwd =
-				workspaceFolder?.uri.fsPath ??
-				findGitRoot(fileDir) ??
-				fileDir;
-
-			try {
-				// run formatter in correct project context
-				await execFileP(cmd, [filePath], {
-					timeout: 15000,
-					cwd,
-				});
-
-				const formatted = fs.readFileSync(filePath, 'utf8');
-
-				const fullRange = new vscode.Range(
-					document.positionAt(0),
-					document.positionAt(document.getText().length),
+				const workspaceFolder = vscode.workspace.getWorkspaceFolder(
+					document.uri
 				);
 
-				return [vscode.TextEdit.replace(fullRange, formatted)];
-			} catch (err: any) {
-				if (err.code === 'ENOENT') {
-					vscode.window.showWarningMessage(
-						'reefmt not found. Install reefmt or set "ree.reefmtPath".',
-					);
-				} else {
-					const detail = err.stderr ?? err.message ?? String(err);
-					vscode.window.showErrorMessage(`reefmt failed: ${detail}`);
-				}
+				const cwd =
+					workspaceFolder?.uri.fsPath ?? findGitRoot(fileDir) ?? fileDir;
 
-				return [];
-			}
-		},
-	});
+				try {
+					const formatted = await runReefmt(
+						cmd,
+						cwd,
+						document.getText()
+					);
+
+					const fullRange = new vscode.Range(
+						document.positionAt(0),
+						document.positionAt(document.getText().length)
+					);
+
+					return [vscode.TextEdit.replace(fullRange, formatted)];
+				} catch (err: any) {
+					vscode.window.showErrorMessage(
+						`reefmt failed: ${err.message ?? err}`
+					);
+					return [];
+				}
+			},
+		}
+	);
 
 	const formatCommand = vscode.commands.registerCommand('ree.format', () => {
 		const editor = vscode.window.activeTextEditor;
-		if (editor && editor.document.languageId === 'ree') {
+		if (editor?.document.languageId === 'ree') {
 			vscode.commands.executeCommand('editor.action.formatDocument');
 		}
 	});
