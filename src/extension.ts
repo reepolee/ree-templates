@@ -13,6 +13,7 @@ import {
 	createTranslationCodeActionProvider,
 } from './i18n/diagnostics';
 import { createTranslationRenameProvider } from './i18n/rename';
+import { createInlineDecorations } from './i18n/inline';
 
 // ─── IntelliSense Data ──────────────────────────────────────────────────────
 
@@ -245,6 +246,9 @@ export function activate(context: vscode.ExtensionContext) {
 		createTranslationRenameProvider()
 	);
 
+	// 7. Inline decorations — show → translated value after {_ / {- tags
+	const inlineDecorations = createInlineDecorations();
+
 	// ─── push all subscriptions ─────────────────────────────────────────────
 
 	context.subscriptions.push(
@@ -264,6 +268,7 @@ export function activate(context: vscode.ExtensionContext) {
 		closeSub,
 		codeActionProvider,
 		renameProvider,
+		inlineDecorations,
 	);
 }
 
