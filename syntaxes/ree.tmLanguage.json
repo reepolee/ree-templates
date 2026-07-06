@@ -110,7 +110,7 @@
 				},
 				{
 					"name": "meta.embedded.translation.ree",
-					"begin": "\\{-\",
+					"begin": "\\{-",
 					"end": "\\}",
 					"beginCaptures": {
 						"0": {
