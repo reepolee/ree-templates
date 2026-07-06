@@ -14,6 +14,7 @@ import {
 } from './i18n/diagnostics';
 import { createTranslationRenameProvider } from './i18n/rename';
 import { createInlineDecorations } from './i18n/inline';
+import { createLocaleStatusBarItem } from './i18n/statusBar';
 
 // ─── IntelliSense Data ──────────────────────────────────────────────────────
 
@@ -249,6 +250,14 @@ export function activate(context: vscode.ExtensionContext) {
 	// 7. Inline decorations — show → translated value after {_ / {- tags
 	const inlineDecorations = createInlineDecorations();
 
+	// 8. Status bar — language switcher
+	const localeStatusBar = createLocaleStatusBarItem();
+
+	// 9. Inline refresh command (called when locale changes via status bar)
+	const refreshInlineCmd = vscode.commands.registerCommand('ree._refreshInline', () => {
+		inlineDecorations.refresh();
+	});
+
 	// ─── push all subscriptions ─────────────────────────────────────────────
 
 	context.subscriptions.push(
@@ -269,6 +278,8 @@ export function activate(context: vscode.ExtensionContext) {
 		codeActionProvider,
 		renameProvider,
 		inlineDecorations,
+		localeStatusBar,
+		refreshInlineCmd,
 	);
 }
 

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { loadTranslations } from './loader';
+import { getDefaultLocale } from './settings';
 
 /**
  * Regex matching {_ key } and {- key } tags.
@@ -12,7 +13,7 @@ const TRANSLATION_TAG_RE = /\{[_-]\s+([\w.]+)\s*\}/g;
  *
  * Works like i18n ally — you see `{_ hero.title } → Welcome` in the editor.
  */
-export function createInlineDecorations(): vscode.Disposable {
+export function createInlineDecorations(): vscode.Disposable & { refresh: () => void } {
 	const decorationType = vscode.window.createTextEditorDecorationType({
 		after: {
 			margin: '0 0 0 0.5em',
@@ -25,6 +26,8 @@ export function createInlineDecorations(): vscode.Disposable {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
 	function update() {
+		const defaultLocale = getDefaultLocale();
+
 		for (const editor of vscode.window.visibleTextEditors) {
 			if (editor.document.languageId !== 'ree') continue;
 
@@ -35,8 +38,8 @@ export function createInlineDecorations(): vscode.Disposable {
 				continue;
 			}
 
-			// Get the first locale's data for display (prefer en, then first available)
-			const displayData = translations['en'] ?? Object.values(translations)[0];
+			// Use the configured locale, fall back to first available
+			const displayData = translations[defaultLocale] ?? Object.values(translations)[0];
 			if (!displayData) {
 				editor.setDecorations(decorationType, []);
 				continue;
@@ -87,10 +90,12 @@ export function createInlineDecorations(): vscode.Disposable {
 	// Initial update
 	update();
 
-	return vscode.Disposable.from(
+	const disposable = vscode.Disposable.from(
 		decorationType,
 		changeSub,
 		visibleSub,
 		{ dispose: () => { if (timer) clearTimeout(timer); } }
 	);
+
+	return Object.assign(disposable, { refresh: update });
 }
