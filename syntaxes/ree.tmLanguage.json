@@ -88,6 +88,48 @@
 					]
 				},
 				{
+					"name": "meta.embedded.translation.ree",
+					"begin": "\\{_",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"name": "string.unquoted.ree.translation-key",
+							"match": "[\\w.]+(?=\\s*\\})"
+						}
+					]
+				},
+				{
+					"name": "meta.embedded.translation.ree",
+					"begin": "\\{-\",
+					"end": "\\}",
+					"beginCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.begin.ree"
+						}
+					},
+					"endCaptures": {
+						"0": {
+							"name": "punctuation.definition.tag.end.ree"
+						}
+					},
+					"patterns": [
+						{
+							"name": "string.unquoted.ree.translation-key",
+							"match": "[\\w.]+(?=\\s*\\})"
+						}
+					]
+				},
+				{
 					"name": "meta.embedded.inline.ree",
 					"begin": "\\{=",
 					"end": "\\}",
