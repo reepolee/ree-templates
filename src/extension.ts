@@ -3,6 +3,19 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
+// ─── i18n providers ─────────────────────────────────────────────────────────
+
+import { createTranslationHoverProvider } from './i18n/hover';
+import { createTranslationCompletionProvider } from './i18n/completion';
+import { createTranslationDefinitionProvider } from './i18n/definition';
+import {
+	createTranslationDiagnostics,
+	createTranslationCodeActionProvider,
+} from './i18n/diagnostics';
+import { createTranslationRenameProvider } from './i18n/rename';
+import { createInlineDecorations } from './i18n/inline';
+import { createLocaleStatusBarItem } from './i18n/statusBar';
+
 // ─── IntelliSense Data ──────────────────────────────────────────────────────
 
 interface ReeCompletion {
@@ -158,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	// ─── completion providers ───────────────────────────────────────────────
+	// ─── completion providers (tags + helpers) ──────────────────────────────
 
 	const tagProvider = vscode.languages.registerCompletionItemProvider(
 		{ language: 'ree' },
@@ -175,13 +188,99 @@ export function activate(context: vscode.ExtensionContext) {
 	const helperProvider = vscode.languages.registerCompletionItemProvider(
 		{ language: 'ree' },
 		{
-			provideCompletionItems(document, position) {
+			provideCompletionItems() {
 				return buildItems(HELPER_COMPLETIONS);
 			},
 		}
 	);
 
-	context.subscriptions.push(formatter, formatCommand, tagProvider, helperProvider);
+	// ─── i18n providers ─────────────────────────────────────────────────────
+
+	// 1. Hover — show values from all locales
+	const translationHoverProvider = vscode.languages.registerHoverProvider(
+		{ language: 'ree' },
+		createTranslationHoverProvider()
+	);
+
+	// 2. Completion — suggest translation keys inside {_ / {- tags
+	const translationCompletionProvider = vscode.languages.registerCompletionItemProvider(
+		{ language: 'ree' },
+		createTranslationCompletionProvider(),
+		'_',
+		'-',
+		'.',
+		' '
+	);
+
+	// 3. Go To Definition — Ctrl+Click opens locale JSON at the key
+	const translationDefinitionProvider = vscode.languages.registerDefinitionProvider(
+		{ language: 'ree' },
+		createTranslationDefinitionProvider()
+	);
+
+	// 4. Diagnostics — underline unknown translation keys
+	const { collection: translationDiagnostics, watcher: translationWatcher, updateDocument } =
+		createTranslationDiagnostics();
+
+	// Update diagnostics on document open/change
+	const diagnosticSub = vscode.workspace.onDidOpenTextDocument(updateDocument);
+	const changeSub = vscode.workspace.onDidChangeTextDocument(e => updateDocument(e.document));
+	const closeSub = vscode.workspace.onDidCloseTextDocument(doc => {
+		translationDiagnostics.delete(doc.uri);
+	});
+
+	// Run diagnostics on initially visible documents
+	for (const editor of vscode.window.visibleTextEditors) {
+		updateDocument(editor.document);
+	}
+
+	// 5. Code Actions — Quick Fix to create missing keys
+	const codeActionProvider = vscode.languages.registerCodeActionsProvider(
+		{ language: 'ree' },
+		createTranslationCodeActionProvider(),
+		{ providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
+	);
+
+	// 6. Rename — F2 renames keys across .ree + .json files
+	const renameProvider = vscode.languages.registerRenameProvider(
+		{ language: 'ree' },
+		createTranslationRenameProvider()
+	);
+
+	// 7. Inline decorations — show → translated value after {_ / {- tags
+	const inlineDecorations = createInlineDecorations();
+
+	// 8. Status bar — language switcher
+	const localeStatusBar = createLocaleStatusBarItem();
+
+	// 9. Inline refresh command (called when locale changes via status bar)
+	const refreshInlineCmd = vscode.commands.registerCommand('ree._refreshInline', () => {
+		inlineDecorations.refresh();
+	});
+
+	// ─── push all subscriptions ─────────────────────────────────────────────
+
+	context.subscriptions.push(
+		formatter,
+		formatCommand,
+		tagProvider,
+		helperProvider,
+
+		// i18n
+		translationHoverProvider,
+		translationCompletionProvider,
+		translationDefinitionProvider,
+		translationDiagnostics,
+		translationWatcher,
+		diagnosticSub,
+		changeSub,
+		closeSub,
+		codeActionProvider,
+		renameProvider,
+		inlineDecorations,
+		localeStatusBar,
+		refreshInlineCmd,
+	);
 }
 
 export function deactivate() { }

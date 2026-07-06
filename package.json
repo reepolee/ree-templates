@@ -2,7 +2,7 @@
 	"name": "ree-templates",
 	"displayName": "ree Templates",
 	"description": "Syntax highlighting and formatting for REE templates (via reefmt)",
-	"version": "1.0.35",
+	"version": "1.0.40",
 	"publisher": "reepolee",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -60,6 +60,12 @@
 					"type": "string",
 					"default": "",
 					"description": "Path to the reefmt executable. Leave empty to use reefmt from PATH."
+				},
+				"ree.translation.defaultLocale": {
+					"type": "string",
+					"default": "en",
+					"scope": "window",
+					"description": "Default locale to display in inline translation decorations and hover."
 				}
 			}
 		},

@@ -1,4 +1,4 @@
-# Render Module — `$lib/render.ts`
+# Render Module - `$lib/render.ts`
 
 A lightweight rendering layer that wraps a template engine, injects shared context, and returns typed `Response` objects. Works alongside `$lib/template.ts` which configures the underlying engine.
 
@@ -6,7 +6,7 @@ A lightweight rendering layer that wraps a template engine, injects shared conte
 
 ## Setup
 
-Before calling any render functions, initialize the module once at app startup — typically in your server entry point.
+Before calling any render functions, initialize the module once at app startup - typically in your server entry point.
 
 ```ts
 import { initialize_render } from "$lib/render";
@@ -57,17 +57,19 @@ export type RenderOptions = {
 	status?: number;
 	headers?: Record<string, string>;
 	ctx?: RequestContext;
+	is_partial?: boolean;
 };
 
 export async function render(template: string, options?: RenderOptions): Promise<Response>;
 ```
 
-| Option    | Type                     | Default | Description                                                         |
-| --------- | ------------------------ | ------- | ------------------------------------------------------------------- |
-| `data`    | `Record<string, any>`    | `{}`    | Template-specific data variables                                    |
-| `status`  | `number`                 | `200`   | HTTP status code                                                    |
-| `headers` | `Record<string, string>` | `{}`    | Additional response headers                                         |
-| `ctx`     | `RequestContext`         | —       | Request context from `create_ctx()` (enables URL, lang, user, etc.) |
+| Option      | Type                     | Default | Description                                                         |
+| ----------- | ------------------------ | ------- | ------------------------------------------------------------------- |
+| `data`      | `Record<string, any>`    | `{}`    | Template-specific data variables                                    |
+| `status`    | `number`                 | `200`   | HTTP status code                                                    |
+| `headers`   | `Record<string, string>` | `{}`    | Additional response headers                                         |
+| `ctx`       | `RequestContext`         | -       | Request context from `create_ctx()` (enables URL, lang, user, etc.) |
+| `is_partial`| `boolean`                | `false` | Skip full-document post-processing (used for streaming fragments)    |
 
 **Returns:** `Promise<Response>` with `Content-Type: text/html`.
 
@@ -75,14 +77,21 @@ export async function render(template: string, options?: RenderOptions): Promise
 
 When `ctx` is provided (from `create_ctx(req)`), the following variables are automatically available in the template:
 
-| Variable      | Source                                 | Description                           |
-| ------------- | -------------------------------------- | ------------------------------------- |
-| `request_url` | `ctx.request_url` (pathname + search)  | Relative URL, e.g. `/products?page=2` |
-| `lang`        | `X-Lang` header → `lang` cookie → `en` | Active language code                  |
-| `locale`      | `ctx.locale`                           | Locale string, e.g. `"sl-SI"`         |
-| `user`        | Session resolved via `resolve_session` | Logged-in user object or `null`       |
-| `toasts`      | `ctx.toasts`                           | Array of pending toast notifications  |
-| `rendered_at` | ISO timestamp string                   | Render timestamp                      |
+| Variable            | Source                                 | Description                           |
+| ------------------- | -------------------------------------- | ------------------------------------- |
+| `request_url`       | `ctx.request_url` (pathname + search)  | Relative URL, e.g. `/products?page=2` |
+| `lang`              | `X-Lang` header → `lang` cookie → `en` | Active language code                  |
+| `locale`            | `ctx.locale`                           | Locale string, e.g. `"sl-SI"`         |
+| `user`              | Session resolved via `resolve_session` | Logged-in user object or `null`       |
+| `toasts`            | `ctx.toasts`                           | Array of pending toast notifications  |
+| `rendered_at`       | ISO timestamp string                   | Render timestamp                      |
+| `prefix`            | `ctx.prefix`                           | Route prefix or `null`                |
+| `csrf_token`        | `X-CSRF-Token` request header          | CSRF token for forms                  |
+| `dark_mode`         | `ctx.dark_mode`                        | Boolean, dark mode preference         |
+| `theme_class`       | `ctx.theme_class`                      | CSS class for theme                   |
+| `active_languages`  | Filtered language list                 | Available languages for language switch|
+| `language_names`    | Language name map                      | Map of language codes to display names|
+| `translations`      | `ctx.translations`                     | Merged translations for this request's lang + route namespace. Read via `{_ path }` / `{- path }`, not directly |
 
 In development mode (`is_dev: true`), two additional debug variables are injected:
 
@@ -106,15 +115,16 @@ Every template automatically has access to these built-in helpers:
 Displays a boolean/numeric value as a styled "Yes" or "No".
 
 ```ts
-yes_no(val: number, type?: "red_green" | "blank_green"): string
+yes_no(val: number, type?: "both" | "yes_only", selectors?: Record<string, string>): string
 ```
 
 **Parameters:**
 
 - `val` - Number or boolean (0/false = "No", non-zero/true = "Yes")
 - `type` - Style variant:
-    - `"blank_green"` (default) - Shows "Yes" with green background, nothing for "No"
-    - `"red_green"` - Shows "Yes" in green, "No" in red
+    - `"yes_only"` (default) - Shows only "Yes" with green background, nothing for "No"
+    - `"both"` - Shows "Yes" in green and "No" in red
+- `selectors` - Optional map of `{"0": "No text", "1": "Yes text"}` to customize labels
 
 **Template example:**
 
@@ -124,7 +134,7 @@ yes_no(val: number, type?: "red_green" | "blank_green"): string
 </div>
 
 <div class="verified">
-  {~ yes_no(record.email_verified, "red_green") }
+  {~ yes_no(record.email_verified, "both") }
 </div>
 ```
 
@@ -169,12 +179,12 @@ Sets the scope context for property access inside the block. All variable refere
 
 This is especially useful in CRUD-generated templates where you frequently access deeply nested properties like `props.columns`, `props.record`, or `props.fields`.
 
-#### `locale_date(date_string, locale?)`
+#### `js_date_to_locale_string(date_string, locale?)`
 
-Formats a date string according to locale.
+Formats a date string as a localized date (MM/DD/YY format).
 
 ```ts
-locale_date(dateString: string, locale?: string): string
+js_date_to_locale_string(dateString: string | Date, locale?: string): string
 ```
 
 **Parameters:**
@@ -185,16 +195,16 @@ locale_date(dateString: string, locale?: string): string
 **Template example:**
 
 ```ree
-<p>Created: {= locale_date(record.created_at) }</p>
-<p>Joined: {= locale_date(record.joined_date, "en-US") }</p>
+<p>Created: {= js_date_to_locale_string(record.created_at) }</p>
+<p>Joined: {= js_date_to_locale_string(record.joined_date, "en-US") }</p>
 ```
 
-#### `locale_time(date_string, locale?)`
+#### `js_time_to_locale_string(date_string, locale?)`
 
-Formats a date string's time portion according to locale.
+Formats a date string's time portion according to locale (h:mm AM/PM format).
 
 ```ts
-locale_time(dateString: string, locale?: string): string
+js_time_to_locale_string(dateString: string | Date, locale?: string): string
 ```
 
 **Parameters:**
@@ -205,15 +215,15 @@ locale_time(dateString: string, locale?: string): string
 **Template example:**
 
 ```ree
-<p>Opens at: {= locale_time(record.opens_at) }</p>
+<p>Opens at: {= js_time_to_locale_string(record.opens_at) }</p>
 ```
 
-#### `locale_ts(date_string, locale?)`
+#### `js_datetime_to_locale_string(date_string, locale?)`
 
-Formats a date string as full date+time according to locale.
+Formats a date string as full date+time according to locale (MM/DD/YY, h:mm AM/PM format).
 
 ```ts
-locale_ts(dateString: string, locale?: string): string
+js_datetime_to_locale_string(input: unknown, locale?: string): string
 ```
 
 **Parameters:**
@@ -224,7 +234,7 @@ locale_ts(dateString: string, locale?: string): string
 **Template example:**
 
 ```ree
-<p>Last updated: {= locale_ts(record.updated_at) }</p>
+<p>Last updated: {= js_datetime_to_locale_string(record.updated_at) }</p>
 ```
 
 #### `display_currency(val, locale?, hide_zero?, symbol?)`
@@ -268,20 +278,56 @@ display_percent(val: number, locale?: string): string
 <p>Discount: {= display_percent(record.discount_rate) }</p>
 ```
 
-#### `iso_date(date_string)`
+#### `js_timestamp_to_locale_string(date_string, locale?)`
 
-Converts a date to ISO format string.
+Formats a date string as full date+time with seconds according to locale (MM/DD/YY, h:mm:ss AM/PM format). Used in generated CRUD `form.ree` templates to display `updated_at` timestamps.
 
 ```ts
-iso_date(dateString: string): string
+js_timestamp_to_locale_string(input: unknown, locale?: string): string
 ```
 
 **Template example:**
 
 ```ree
-<time datetime="{= iso_date(record.published_at) }">
-  {= locale_date(record.published_at) }
+<div class="text-sm">{~ js_timestamp_to_locale_string(record.updated_at ?? record.created_at) }</div>
+```
+
+#### `js_date_to_iso_string(date_string)`
+
+Converts a date to ISO date format string.
+
+```ts
+js_date_to_iso_string(dateInput: string | Date): string
+```
+
+**Template example:**
+
+```ree
+<time datetime="{= js_date_to_iso_string(record.published_at) }">
+  {= js_date_to_locale_string(record.published_at) }
 </time>
+```
+
+#### `js_datetime_to_iso_string(date_string)`
+
+Converts a datetime to ISO datetime format string (for `<input type="datetime-local">` values). Used in generated CRUD `form.ree` templates for datetime fields.
+
+```ts
+js_datetime_to_iso_string(dateInput: string | Date): string
+```
+
+**Template example:**
+
+```ree
+<input type="datetime-local" id="verified_at" name="verified_at" value="{~ js_datetime_to_iso_string(record.verified_at) }" />
+```
+
+#### `js_timestamp_to_iso_string(date_string)`
+
+Converts a timestamp to ISO datetime format string with seconds.
+
+```ts
+js_timestamp_to_iso_string(dateInput: string | Date): string
 ```
 
 #### `url(path)`
@@ -317,7 +363,7 @@ When the current language is Slovenian (`sl`), `/auth/login` becomes `/avtentika
 <form method="POST" action="{~ localized_path(props.action) }">
 ```
 
-See [AGENTS.md](AGENTS.md#url-localization) for documentation on URL localization via `route_name` keys in translation files.
+See [AGENTS.md](CONTEXT.md#route-alias) for documentation on URL localization via `route_name` keys in translation files.
 
 #### `is_current(page_url)`
 
@@ -337,6 +383,21 @@ Returns `"font-bold nav-item current"` if the current page matches, otherwise `"
   <a href="/about" class="{= is_current('/about') }">About</a>
 </nav>
 ```
+
+### Additional Built-in Helpers
+
+These helpers are also available in every template without passing them:
+
+| Helper | Signature | Description |
+| --- | --- | --- |
+| `pill(text, class_name)` | `(string, string) => string` | Wraps text in a styled `<div>` with the given CSS class |
+| `tags(val, color_class?, tag_translations?)` | `(string, string?, Record<string,string>?) => string` | Renders comma-separated tags as styled pills |
+| `human_bytes(bytes)` | `(number) => string` | Formats bytes as human-readable (e.g. `"1.5 MB"`) |
+| `is_checked(key, value, filter_params)` | `(string, string\|number, Record<string,string>) => boolean` | Checks if a filter value is active in URL params |
+| `urlencode(str)` | `(string) => string` | URL-encodes a string |
+| `urldecode(str)` | `(string) => string` | URL-decodes a string |
+| `key_values(obj)` | `(Record<string,any>) => string` | Renders object as HTML attribute key=value pairs |
+| `nav_label(key, nav?)` | `(string, Record<string,any>?) => string` | Looks up a navigation label by dot-separated key |
 
 ### Custom Ad-hoc Helpers
 
@@ -413,16 +474,16 @@ return render("dashboard", {
 
 ### Helper Scope and Availability
 
-- **Default helpers** (yes_no, locale_date, etc.) are always available — auto-injected by `render()`
+- **Default helpers** (yes_no, js_date_to_locale_string, etc.) are always available - auto-injected by `render()`
 - **Custom helpers** are passed as functions in the `data` object, called with `()` syntax
-- **No separate `helpers` option** in `render()` — use `data` for custom helper functions
+- **No separate `helpers` option** in `render()` - use `data` for custom helper functions
 - **Default helpers can be overridden** by passing a function with the same name in `data`
 
 ---
 
 ### `get_render()`
 
-Returns the raw render function for cases where you need to render a template to a string rather than a `Response` — for example, rendering email bodies or partial fragments.
+Returns the raw render function for cases where you need to render a template to a string rather than a `Response` - for example, rendering email bodies or partial fragments.
 
 ```ts
 const render_template = get_render();
@@ -593,8 +654,8 @@ You can use both default helpers and custom ones together. Default helpers are a
 data: {
   records: data,
   status_with_date: (status, date) => {
-    const status_html = yes_no(status === "active", "red_green");
-    const date_str = locale_date(date);
+    const status_html = yes_no(status === "active", "both");
+    const date_str = js_date_to_locale_string(date);
     return `${status_html} (${date_str})`;
   },
 }
@@ -602,64 +663,55 @@ data: {
 
 ---
 
-## Best Practices — Using `{#with}`
+## Best Practices - Using `{#with}`
 
-### When to use `{#with}`
+### Translation lookups don't need `{#with}`
 
-Wrap sections where you access the same `props.*` sub-object multiple times. A good rule of thumb: **3+ repeated accesses** on the same sub-object justify a `{#with}` block.
+`{_ path }` / `{- path }` already resolve against `props.translations` directly, with no repeated prefix
+to eliminate and no missing-key crash risk - so the old pattern of wrapping a section in `{#with props.ui}`
+to shorten repeated `props.ui.x` accesses is no longer needed for translation data:
 
 ```ree
-<!-- ❌ Verbose: props.ui repeated 6 times -->
-<h1>{= props.ui.title }</h1>
-<p>{= props.ui.description }</p>
-<h2>{= props.ui.mission_title }</h2>
-<p>{= props.ui.mission_text }</p>
-<h2>{= props.ui.team_title }</h2>
-<p>{= props.ui.team_text }</p>
-
-<!-- ✅ Clean: one {#with} eliminates 6 prefixes -->
-{#with props.ui}
-  <h1>{= title }</h1>
-  <p>{= description }</p>
-  <h2>{= mission_title }</h2>
-  <p>{= mission_text }</p>
-  <h2>{= team_title }</h2>
-  <p>{= team_text }</p>
-{/with}
+<!-- No {#with} needed - {_ } already strips the prefix and adds a {last_segment} safety net -->
+<h1>{_ ui.title }</h1>
+<p>{_ ui.description }</p>
+<h2>{_ ui.mission_title }</h2>
+<p>{_ ui.mission_text }</p>
 ```
+
+`{#with}` is still useful for non-translation data accessed repeatedly - `props.record`, a loop item, a
+CRUD `props.columns` block - see below.
 
 ### `delete` is a JavaScript keyword
 
-You **cannot** use `{= delete }` inside a `{#with}` block — `delete` is a reserved word in JavaScript and using it as a bare identifier causes a `SyntaxError` at template compile time. Always use the full `props.actions.delete` path:
+Bare identifiers inside a `{#with}` block that shadow JS reserved words cause a `SyntaxError` at template
+compile time (`{= delete}` inside `{#with props.actions}`, for example). `{_ actions.delete}` sidesteps
+this entirely - the path is parsed as a string, not evaluated as a bare JS identifier, so keyword
+collisions never happen:
 
 ```ree
-<!-- ❌ Breaks: `delete` is a JS keyword -->
-{#with props.actions}
-  <h2>{= delete}</h2>
-{/with}
-
-<!-- ✅ Works: explicit property access -->
-{#with props.actions}
-  <h2>{= props.actions.delete}</h2>  <!-- `delete` after a dot is fine -->
-  <button>{= abort_delete}</button>  <!-- non-keywords can be bare -->
-  <button>{= confirm_delete}</button>
-{/with}
+<!-- ✅ Works - {_ } never hits the keyword problem -->
+<h2>{_ actions.delete}</h2>
+<button>{_ actions.abort_delete}</button>
+<button>{_ actions.confirm_delete}</button>
 ```
 
-Other JS keywords to watch for: `class`, `default`, `new`, `return`, `switch`, `this`, `throw` — if you use any of these as translation/action keys, keep them as explicit property paths inside `{#with}`.
+If you're inside a `{#with}` block for non-translation data and need a translation whose key happens to be
+a keyword, `{_ }` still works unchanged since it doesn't participate in `with` scoping at all - it always
+resolves against `props.translations` regardless of what `{#with}` block it's nested in.
 
 ### Local variables always win
 
-Local variables (including destructured `props`, inner `{#each}` loop variables, and helpers) always take precedence over `{#with}` context properties. This means you can mix `{#with}` with other blocks safely:
+Local variables (including destructured `props`, inner `{#each}` loop variables, and helpers) always take
+precedence over `{#with}` context properties. This means you can mix `{#with}` with other blocks safely:
 
 ```ree
-{#with props.actions}
-  {= save }
-  {= save_close }
+{#with props.record}
+  {= name }
 
   {#if (props.record.id) && props.enable_delete }
     <!-- props is a local var → resolves correctly, not shadowed by with context -->
-    <button>{= props.actions.delete}</button>
+    <button>{_ actions.delete}</button>
   {/if}
 {/with}
 ```
@@ -679,35 +731,39 @@ Helpers (`yes_no`, `localized_path`, `display_currency`, etc.) are injected as l
     </tr>
   {/with}
 {:else}
-  <p>{= props.ui.no_records }</p>
+  <p>{_ ui.no_records }</p>
 {/each}
 ```
 
 ### Nested `{#with}` blocks
 
-You can nest `{#with}` blocks — the inner scope shadows the outer one for matching properties:
+You can nest `{#with}` blocks - the inner scope shadows the outer one for matching properties. `{_ }`/`{- }`
+are unaffected by nesting depth, since they always resolve against `props.translations`, not the current
+`with` scope:
 
 ```ree
-{#with props.__child.ui__}
-  <h2>{= new_title }</h2>
+{#with props.record}
+  <h2>{_ child_ui.new_title }</h2>  <!-- unaffected by the {#with props.record} scope -->
 
-  {#with props.actions}
-    <button>{= save}</button>      <!-- props.actions.save -->
-    <button>{= cancel}</button>    <!-- props.actions.cancel -->
-  {/with}
+  {#each items as item}
+    <span>{= item.name }</span>     <!-- record's local scope still applies to non-translation data -->
+  {/each}
 {/with}
 ```
 
-### CRUD template pattern — `{#with props}` + `{#with record}`
+### CRUD template pattern - `{#with props}` + `{#with record}`
 
-Generated CRUD index templates use a two-tier `{#with}` pattern to keep headers and cells clean. The headers section is wrapped with `{#with props}`, and each data row is wrapped with `{#with record}` (where `record` is the `{#each}` loop variable):
+Generated CRUD index templates use a two-tier `{#with}` pattern to keep headers and cells clean for
+non-translation, structural data (`columns`, the loop's `record`). The headers section is wrapped with
+`{#with props}`, and each data row is wrapped with `{#with record}` (where `record` is the `{#each}` loop
+variable). Translation lookups inside either block use `{_ }`/`{- }`, not the `with` scope:
 
 ```ree
-<!-- HEADERS: wrapped with {#with props} → bare columns/labels names -->
+<!-- HEADERS: wrapped with {#with props} → bare columns names; labels use {_ } -->
 {#with props}
   <div>ID</div>
-  <div class="{= columns.name.class }">{= labels.name }</div>
-  <div class="{= columns.email.class }">{= labels.email }</div>
+  <div class="{= columns.name.class }">{_ labels.name }</div>
+  <div class="{= columns.email.class }">{_ labels.email }</div>
 {/with}
 
 <!-- ROWS: each record wrapped with {#with record} → bare field names -->
@@ -722,16 +778,17 @@ Generated CRUD index templates use a two-tier `{#with}` pattern to keep headers 
 
 Key points:
 
-- **Headers** (`{#with props}`): `{= columns.name.class }` resolves as `props.columns.name.class`, `{= labels.name }` as `props.labels.name`.
+- **Headers** (`{#with props}`): `{= columns.name.class }` resolves as `props.columns.name.class` (structural data, stays `{= }`). `{_ labels.name }` resolves against `props.translations.labels.name` regardless of the `with` scope.
 - **Cells** (`{#with record}`): `{= name }` resolves as `record.name`. The class still uses the full `{= props.columns.name.class }` path because `props` is a local variable that takes precedence over the with context.
-- **Nested child grids**: Child headers also use `{#with props}`, child rows use `{#with child}` for their cells — same pattern, different loop variable.
-- **Generator alignment**: The `render_field_header()` function emits bare `{= columns.* }` / `{= labels.* }` (no `props.` prefix), expecting the `{#with props}` wrapper. The `render_field_cell()` function emits bare `{= name }` field names (no `record.` prefix), expecting the `{#with record}` wrapper.
+- **Nested child grids**: Child headers also use `{#with props}`, child rows use `{#with child}` for their cells - same pattern, different loop variable. Note `child_ui`/`child_fields` are handler-flattened plain data (from the child route's own `ctx.translations`, resolved separately), not `props.translations` - they stay `{= }`, not `{_ }`. See `docs/adr/0001-translation-lookup-tags.md`.
+- **Generator alignment**: The `render_field_header()` function emits bare `{= columns.* }` (no `props.` prefix, structural data) and `{_ labels.* }` (translation, ignores `with` scope) - both expecting the `{#with props}` wrapper for the structural half. The `render_field_cell()` function emits bare `{= name }` field names (no `record.` prefix), expecting the `{#with record}` wrapper.
 
 ### When NOT to use `{#with}`
 
-- **One-off accesses** — a single `props.xxx.yyy` doesn't justify wrapping
-- **Mixed sub-objects** — if a section accesses `props.ui.x`, `props.actions.y`, and `props.record.z` equally, one `{#with}` can't simplify all three
-- **Inside `<script>` tags with mixed references** — the overhead of tracking scope across long script blocks isn't worth it; keep full paths in scripts
+- **One-off accesses** - a single `props.xxx.yyy` doesn't justify wrapping
+- **Translation lookups** - use `{_ }`/`{- }` directly, no wrapping needed or beneficial
+- **Mixed sub-objects** - if a section accesses `props.record.z` and other unrelated data equally, one `{#with}` can't simplify all of it
+- **Inside `<script>` tags with mixed references** - the overhead of tracking scope across long script blocks isn't worth it; keep full paths in scripts
 
 ---
 
@@ -756,7 +813,7 @@ Templates use the `.ree` extension and are resolved relative to the `routes/` di
 
 ---
 
-## Template Engine — Full Reference
+## Template Engine - Full Reference
 
 The engine is a file-based template compiler inspired by Eta.js and Svelte, optimised for the Bun runtime. It compiles `.ree` files to async functions and optionally caches them in production.
 
@@ -768,9 +825,37 @@ The engine is a file-based template compiler inspired by Eta.js and Svelte, opti
 | ----------- | ------------------------------ | ------------------------------- |
 | `{= expr }` | Escaped HTML output            | `{= user.name }`                |
 | `{~ expr }` | Unescaped / raw HTML output    | `{~ content.html }`             |
+| `{_ path }` | Translation lookup, escaped    | `{_ labels.text_input }`        |
+| `{- path }` | Translation lookup, unescaped  | `{- descriptions.card }`        |
 | `{{ ... }}` | Raw JavaScript (double braces) | `{{ const x = items.length; }}` |
 
 HTML escaping converts `& < > " '` to their entity equivalents. Use `{~ }` only when you fully trust the content.
+
+#### Translation lookup tags: `{_ path }` / `{- path }`
+
+Use these for every read from `props.translations` (labels, `ui.*`, `errors.*`, `messages.*`,
+`descriptions.*`, `actions.*`, `nav`, `nav_prefix_title`, `nav_auth`, ...). `path` must be a simple
+dotted property path - no arbitrary JS, no computed keys, no function calls:
+
+```
+{_ ui.title}
+{_ labels.text_input}
+{- descriptions.card}
+```
+
+`{_ }` HTML-escapes; `{- }` does not, for the rare translation value that legitimately contains markup.
+On a missing key - including `props.translations` being absent entirely, which is normal while
+scaffolding a route's layout before its translation keys are wired up - both render `{last_segment}`
+(e.g. `{_ labels.text_input}` on a miss renders `{text_input}`), never throwing and never silently
+rendering empty. This is the same marker convention `mark_missing_from()` (`lib/i18n.ts`) and
+`nav_label()` use elsewhere.
+
+`{= }`/`{~ }` can technically still reach `props.translations` directly (`{= props.translations.ui.title }`)
+but this is discouraged - it bypasses the missing-key marker, so a typo or an unwired key silently
+renders as `""` instead of showing up as `{title}`. Reserve `{= }`/`{~ }` for everything that is not a
+translation lookup: `props.user`, `props.record`, loop variables, computed expressions.
+
+See `docs/adr/0001-translation-lookup-tags.md` for the full design rationale.
 
 #### Control flow
 
@@ -824,7 +909,7 @@ Includes another template inline. The included template receives a merged copy o
 
 **Always use ReeTag (`<ree-tag></ree-tag>`) for component includes.** For cases where the props object itself must be computed (e.g. spreading additional fields), use `{#include("$components/name", computedProps)}` directly.
 
-**ReeTag — `<tag-name>` custom-element syntax:**
+**ReeTag - `<tag-name>` custom-element syntax:**
 
 ```
 <app-banner type="red">{= props.form_errors }</app-banner>
@@ -836,19 +921,19 @@ Includes another template inline. The included template receives a merged copy o
 Any tag whose name contains **at least one hyphen** is treated as a component invocation. The pre-processor converts it internally to `{#include("$components/tag-name", {children: <compiled slot>, attributes: { "type": "red" }})}`.
 
 - Slot content is compiled in the parent's scope and passed as `props.children`
-- HTML attributes are passed as `props.attributes` — template expressions `{= expr }` and `{~ expr }` inside attribute values ARE compiled, evaluated at render time
+- HTML attributes are passed as `props.attributes` - template expressions `{= expr }`, `{~ expr }`, `{_ path }`, and `{- path }` inside attribute values ARE compiled, evaluated at render time (e.g. `title="{_ ui.reset_btn }"` resolves against `props.translations` with the same `{last_segment}` miss-marker `{_ }` gives everywhere else)
 - Tags **without** a hyphen (e.g. `<banner>`) are treated as literal HTML and passed through unprocessed
-- Reads more like HTML — components can be authored and read in a natural slot/content style
+- Reads more like HTML - components can be authored and read in a natural slot/content style
 - The component receives `children` and reads from `props.children` instead of digging into `attributes.text`
 
-**Direct `{#include(...)}` — for computed prop objects:**
+**Direct `{#include(...)}` - for computed prop objects:**
 
 ```
 {#include("$components/card", { title, href, ...extra_props })}
 {#include("$components/badge", { label: get_badge_label(record), color: get_badge_color(record) })}
 ```
 
-Use this form when the props object itself must be built dynamically (computed keys, spread operator, conditional inclusion of fields). For static attributes, prefer ReeTag — it reads more like HTML and the component receives `children` naturally.
+Use this form when the props object itself must be built dynamically (computed keys, spread operator, conditional inclusion of fields). For static attributes, prefer ReeTag - it reads more like HTML and the component receives `children` naturally.
 
 #### `<auto-complete>` component
 
@@ -869,7 +954,7 @@ The `<auto-complete>` component (`components/auto-complete.ree`) renders a searc
 | --------- | -------------------------------------------- | ------- |
 | `rows`    | Number of visible rows (dropdown max-height) | `6`     |
 
-**Example — generated form field:**
+**Example - generated form field:**
 
 ```html
 <auto-complete
@@ -895,7 +980,7 @@ The component inherits `props.labels`, `props.record`, and `props.selectors` fro
 ></auto-complete>
 ```
 
-Just `rows` is enough to control dropdown height — `max-height` is computed as `rows × 32px`. If both `rows` and `max-height` attributes are set, `max-height` takes precedence.
+Just `rows` is enough to control dropdown height - `max-height` is computed as `rows × 32px`. If both `rows` and `max-height` attributes are set, `max-height` takes precedence.
 
 ### Path Resolution
 
@@ -1002,19 +1087,19 @@ For objects, `item` is the value, `index` is the numeric position, and `key` is 
 
 ### Template Issues
 
-**Unmatched braces / syntax error** — CSS and JS object literals like `{ color: red }` won't be parsed as tags since the engine only recognises `{=`, `{~`, `{#`, `{:`, `{/`, and `{{`. If you see unexpected output, check for a stray tag prefix.
+**Unmatched braces / syntax error** - CSS and JS object literals like `{ color: red }` won't be parsed as tags since the engine only recognises `{=`, `{~`, `{#`, `{:`, `{/`, and `{{`. If you see unexpected output, check for a stray tag prefix.
 
-**Template file not found** — the path is resolved relative to the `views` directory (or the alias root for `$components/` etc.). Verify the file exists without the extension, e.g. `engine.render("pages/home")` maps to `<views>/pages/home.ree`.
+**Template file not found** - the path is resolved relative to the `views` directory (or the alias root for `$components/` etc.). Verify the file exists without the extension, e.g. `engine.render("pages/home")` maps to `<views>/pages/home.ree`.
 
-**Unclosed block error** — every `{#if}` needs `{/if}` and every `{#each}` needs `{/each}`. The error message lists which block types are still open.
+**Unclosed block error** - every `{#if}` needs `{/if}` and every `{#each}` needs `{/each}`. The error message lists which block types are still open.
 
-**Multiple `{:else}` in same block** — only one `{:else}` is allowed per `{#if}` or `{#each}`.
+**Multiple `{:else}` in same block** - only one `{:else}` is allowed per `{#if}` or `{#each}`.
 
-**Include path escapes base directory** — path traversal outside the resolved root (e.g. `../../../../etc/passwd`) is blocked and throws. Use alias paths (`$lib/`, `$components/`) to reference files outside `views/`.
+**Include path escapes base directory** - path traversal outside the resolved root (e.g. `../../../../etc/passwd`) is blocked and throws. Use alias paths (`$lib/`, `$components/`) to reference files outside `views/`.
 
 ### Helper Issues
 
-**"[function] is not defined"** — The helper function isn't available in the template. If it's a custom helper, make sure you pass it in the `data` object. Default helpers (yes_no, locale_date, etc.) are auto-injected.
+**"[function] is not defined"** - The helper function isn't available in the template. If it's a custom helper, make sure you pass it in the `data` object. Default helpers (yes_no, js_date_to_locale_string, etc.) are auto-injected.
 
 ```typescript
 // ✅ CORRECT - custom helper passed in data
@@ -1027,7 +1112,7 @@ return render("template", {
 });
 ```
 
-**"[function] is not a function"** — The helper exists but isn't being called correctly. Helpers must be functions that return a value.
+**"[function] is not a function"** - The helper exists but isn't being called correctly. Helpers must be functions that return a value.
 
 ```ree
 {~ uppercase(record.name) }  <!-- ✅ Correct -->
@@ -1035,7 +1120,7 @@ return render("template", {
 {~ record.uppercase }        <!-- ❌ Wrong - accessing as property -->
 ```
 
-**Helper receives wrong type** — Make sure the data you pass matches what the helper expects.
+**Helper receives wrong type** - Make sure the data you pass matches what the helper expects.
 
 ```typescript
 // ❌ Helper expects string but receives number
@@ -1049,7 +1134,7 @@ data: {
 }
 ```
 
-**Helper can't access template variables** — Helpers only receive what you pass as arguments.
+**Helper can't access template variables** - Helpers only receive what you pass as arguments.
 
 ```ree
 <!-- ❌ WRONG - helper can't see 'user' variable -->
@@ -1067,8 +1152,8 @@ data: {
 
 | Variable                   | Type / Value                           | Description                                         |
 | -------------------------- | -------------------------------------- | --------------------------------------------------- |
-| `site_name`                | `string` — `"reepolee App v<version>"` | App name with version from `package.json`           |
-| `year`                     | `number` — current year                | Useful for copyright footers                        |
+| `site_name`                | `string` - `"reepolee App v<version>"` | App name with version from `package.json`           |
+| `year`                     | `number` - current year                | Useful for copyright footers                        |
 | `is_dev`                   | `boolean`                              | `true` when server started with `--dev`             |
 | `url(p)`                   | `(p: string) => string`                | Ensures a path starts with `/`; use in `href` attrs |
 | `menu_entries_crud_routes` | `CrudRoute[]`                          | CRUD routes flagged with `is_menu_entry: true`      |
@@ -1095,7 +1180,7 @@ These merge with any per-render `data` argument. Per-render data takes precedenc
 
 When `is_dev` is `true`:
 
-- **Template caching is disabled** — file changes are reflected immediately without restarting.
+- **Template caching is disabled** - file changes are reflected immediately without restarting.
 - **Live reload** is injected into every HTML response via `inject_live_reload()`.
 - **`toJSON` / `toPrettyJSON`** debug variables are available in templates.
 - **SSE endpoint** `/__reload` is registered for the live-reload client connection.
@@ -1227,3 +1312,16 @@ export async function GET_products(req: BunRequest) {
   {/each}
 </div>
 ```
+
+---
+
+## Missing Translation Keys
+
+When a translation key is not found in the database, the system renders only the **last segment** of the key path. For example:
+
+- Database key: `user.equipment.actions.new_equipment` → displays as `{new_equipment}`
+- Database key: `actions.cancel` → displays as `{cancel}`
+
+This behavior keeps the UI clean during development while still indicating that a key is missing. The full path is always available in the database and source code for reference.
+
+**Implementation:** three producers share this convention. `mark_missing_from()` in `lib/i18n.ts` backfills a non-English language when English has a key it doesn't, at translation-load time. `{_ path }` / `{- path }` template tags (see "Translation lookup tags" above) catch a key absent from `props.translations` entirely, at render time. `nav_label()` in `lib/template_helpers.ts` does the same for nav entries. All three extract only the last dot-segment for the placeholder.
