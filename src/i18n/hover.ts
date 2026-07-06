@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { loadTranslations } from './loader';
+import { getDefaultLocale } from './settings';
 
 /**
  * Regex that matches a translation tag and captures the key path.
@@ -45,23 +46,35 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 				const translations = loadTranslations(document.fileName);
 				if (!translations) return undefined;
 
+				const defaultLocale = getDefaultLocale();
 				const md = new vscode.MarkdownString();
 				md.isTrusted = true;
 				md.supportHtml = true;
 
 				md.appendMarkdown(`**Translation key:** \`${key}\`\n\n`);
 
-				let hasAnyValue = false;
+				// Show the selected/default locale first with emphasis
+				const defaultData = translations[defaultLocale];
+				const defaultVal = defaultData?.[key];
+
+				if (defaultVal !== undefined) {
+					md.appendCodeblock(defaultVal, 'text');
+					md.appendMarkdown(`⭐ **${defaultLocale.toUpperCase()}** *(default)*\n\n`);
+				}
+
+				// Then show all other locales
+				let hasOthers = false;
 				for (const [locale, data] of Object.entries(translations)) {
+					if (locale === defaultLocale) continue;
 					const value = data[key];
 					if (value !== undefined) {
-						hasAnyValue = true;
+						hasOthers = true;
 						md.appendCodeblock(value, 'text');
 						md.appendMarkdown(`— *${locale.toUpperCase()}*\n\n`);
 					}
 				}
 
-				if (!hasAnyValue) {
+				if (defaultVal === undefined && !hasOthers) {
 					md.appendMarkdown('_(key not found in any locale)_');
 				}
 

@@ -64,7 +64,8 @@
 				"ree.translation.defaultLocale": {
 					"type": "string",
 					"default": "en",
-					"description": "Default locale to display in inline translation decorations."
+					"scope": "window",
+					"description": "Default locale to display in inline translation decorations and hover."
 				}
 			}
 		},

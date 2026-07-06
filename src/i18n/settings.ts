@@ -123,5 +123,5 @@ export function getDefaultLocale(): string {
 export async function setDefaultLocale(locale: string): Promise<void> {
 	await vscode.workspace
 		.getConfiguration('ree')
-		.update('translation.defaultLocale', locale, vscode.ConfigurationTarget.WorkspaceFolder);
+		.update('translation.defaultLocale', locale, vscode.ConfigurationTarget.Global);
 }
