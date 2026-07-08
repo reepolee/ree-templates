@@ -101,41 +101,12 @@ function resolve_formatter_cmd(config: vscode.WorkspaceConfiguration): string {
 	return resolve_cmd_for(config, formatter);
 }
 
-// ─── formatter discovery (which + version) ──────────────────────────────────
+// ─── formatter discovery (version) ───────────────────────────────────────────
 
 interface formatter_status {
 	formatter: formatter_id;
-	cmd: string;
-	// Absolute path when resolved, or null when the command could not be found.
-	resolved_path: string | null;
-	// Version string reported by the executable, or null when unavailable.
+	// Version string reported by the executable, or null when not installed.
 	version: string | null;
-}
-
-// Resolve a command to an absolute path. An explicit path is verified with
-// fs.existsSync; a bare name is looked up on PATH honouring PATHEXT on Windows.
-function which(cmd: string): string | null {
-	// Explicit path (contains a separator) - just verify it exists.
-	if (cmd.includes(path.sep) || cmd.includes('/')) {
-		const exists = fs.existsSync(cmd);
-		return exists ? cmd : null;
-	}
-
-	const path_env = process.env.PATH || '';
-	const dirs = path_env.split(path.delimiter).filter(Boolean);
-
-	const is_windows = process.platform === 'win32';
-	const pathext = is_windows ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM') : '';
-	const exts = is_windows ? pathext.split(';').filter(Boolean) : [''];
-
-	for (const dir of dirs) {
-		for (const ext of exts) {
-			const candidate = path.join(dir, cmd + ext);
-			if (fs.existsSync(candidate)) return candidate;
-		}
-	}
-
-	return null;
 }
 
 // Query the executable for its version via `--version`. Returns the trimmed
@@ -164,17 +135,16 @@ function query_version(cmd: string): Promise<string | null> {
 	});
 }
 
-// Probe both formatters and return their resolved path and version.
-async function check_formatters(config: vscode.WorkspaceConfiguration): Promise<formatter_status[]> {
+// Probe the real installed CLIs and return their versions. We look each one up
+// by its own name (not the formatting path overrides) so a path shim - e.g.
+// reefmtPath pointing at reettier - does not mask the genuine reefmt version.
+async function check_formatters(): Promise<formatter_status[]> {
 	const ids: formatter_id[] = ['reefmt', 'reettier'];
 	const results: formatter_status[] = [];
 
 	for (const formatter of ids) {
-		const cmd = resolve_cmd_for(config, formatter);
-		const resolved_path = which(cmd);
-		const version = resolved_path ? await query_version(resolved_path) : null;
-
-		results.push({ formatter, cmd, resolved_path, version });
+		const version = await query_version(formatter);
+		results.push({ formatter, version });
 	}
 
 	return results;
@@ -274,24 +244,23 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	// ─── check formatters (which + version) ──────────────────────────────────
+	// ─── check formatters (installed versions) ───────────────────────────────
 
 	const checkFormattersCommand = vscode.commands.registerCommand('ree.checkFormatters', async () => {
 		const doc_uri = vscode.window.activeTextEditor?.document.uri;
 		const config = vscode.workspace.getConfiguration('ree', doc_uri);
 		const selected = config.get<formatter_id>('formatter', 'reefmt');
 
-		const statuses = await check_formatters(config);
+		const statuses = await check_formatters();
 
 		const lines = statuses.map(s => {
 			const active = s.formatter === selected ? ' (active)' : '';
 
-			if (!s.resolved_path) {
-				return `${s.formatter}${active}: not found (looked for "${s.cmd}")`;
+			if (!s.version) {
+				return `${s.formatter}${active}: not installed`;
 			}
 
-			const version = s.version ?? 'version unknown';
-			return `${s.formatter}${active}: ${version} at ${s.resolved_path}`;
+			return `${s.formatter}${active}: ${s.version}`;
 		});
 
 		const summary = lines.join('\n');

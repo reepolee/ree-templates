@@ -16,10 +16,11 @@ Both are executables that read source from stdin.
 
 ## Commands
 
-- **ree: Check Formatters (path and version)** (`ree.checkFormatters`) - probes
-  both `reefmt` and `reettier` using your path settings (or PATH), and reports
-  the resolved absolute path and current version of each. The one selected by
-  `ree.formatter` is marked `(active)`.
+- **ree: Check Formatters (path and version)** (`ree.checkFormatters`) - reports
+  the installed version of both `reefmt` and `reettier`, looking each one up by
+  its own name on PATH (so a path shim does not mask the real version). The one
+  selected by `ree.formatter` is marked `(active)`; a missing CLI shows as
+  `not installed`.
 
 ## Settings
 
