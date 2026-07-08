@@ -61,10 +61,6 @@ function findProjectRoot(startDir: string): string {
 	let dir = startDir;
 
 	while (true) {
-		// reefmt config FIRST (most important)
-		if (fs.existsSync(path.join(dir, 'reefmt.jsonc'))) return dir;
-		if (fs.existsSync(path.join(dir, 'reefmt.toml'))) return dir;
-
 		// git fallback
 		if (fs.existsSync(path.join(dir, '.git'))) return dir;
 
@@ -79,35 +75,14 @@ function findProjectRoot(startDir: string): string {
 
 // ─── formatter selection ────────────────────────────────────────────────────
 
-type formatter_id = 'reefmt' | 'reettier';
-
-// Resolve the executable command for a specific formatter. When the matching
-// path setting is empty we fall back to the bare name so PATH lookup applies.
-function resolve_cmd_for(config: vscode.WorkspaceConfiguration, formatter: formatter_id): string {
-	if (formatter === 'reettier') {
-		const reettier_path = config.get<string>('reettierPath', '');
-		return reettier_path || 'reettier';
-	}
-
-	const reefmt_path = config.get<string>('reefmtPath', '');
-	return reefmt_path || 'reefmt';
-}
-
-// Resolve the executable command for the selected formatter. reefmt is a
-// standard AST reprinter, reettier is an indenter that keeps the user's line
-// breaks. Both are executables that read source from stdin via --stdin.
+// Resolve the executable command for reettier. When the path setting is empty
+// we fall back to the bare name so PATH lookup applies.
 function resolve_formatter_cmd(config: vscode.WorkspaceConfiguration): string {
-	const formatter = config.get<formatter_id>('formatter', 'reefmt');
-	return resolve_cmd_for(config, formatter);
+	const reettier_path = config.get<string>('reettierPath', '');
+	return reettier_path || 'reettier';
 }
 
 // ─── formatter discovery (version) ───────────────────────────────────────────
-
-interface formatter_status {
-	formatter: formatter_id;
-	// Version string reported by the executable, or null when not installed.
-	version: string | null;
-}
 
 // Query the executable for its version via `--version`. Returns the trimmed
 // first line, or null when the command is missing or errors out.
@@ -135,26 +110,18 @@ function query_version(cmd: string): Promise<string | null> {
 	});
 }
 
-// Probe the real installed CLIs and return their versions. We look each one up
-// by its own name (not the formatting path overrides) so a path shim - e.g.
-// reefmtPath pointing at reettier - does not mask the genuine reefmt version.
-async function check_formatters(): Promise<formatter_status[]> {
-	const ids: formatter_id[] = ['reefmt', 'reettier'];
-	const results: formatter_status[] = [];
-
-	for (const formatter of ids) {
-		const version = await query_version(formatter);
-		results.push({ formatter, version });
-	}
-
-	return results;
+// Probe the real installed reettier CLI and return its version. We look it up
+// by its own name (not the formatting path override) so a path shim does not
+// mask the genuine version.
+async function check_formatters(): Promise<string | null> {
+	return query_version('reettier');
 }
 
 // ─── formatter runner (unchanged idea, just safer) ─────────────────────────
 
-function run_formatter(cmd: string, cwd: string, input: string): Promise<string> {
+function run_formatter(cmd: string, cwd: string, input: string, extraArgs: string[] = []): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const p = spawn(cmd, ['--stdin'], {
+		const p = spawn(cmd, ['--stdin', ...extraArgs], {
 			cwd,
 			stdio: ['pipe', 'pipe', 'pipe'],
 		});
@@ -244,26 +211,42 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// ─── format with reprint (full AST re-derivation via reettier --full) ───
+
+	const formatWithReprintCommand = vscode.commands.registerCommand('ree.formatWithReprint', async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || editor.document.languageId !== 'ree') {
+			return;
+		}
+
+		const document = editor.document;
+		const config = vscode.workspace.getConfiguration('ree', document.uri);
+		const cmd = resolve_formatter_cmd(config);
+		const cwd = findProjectRoot(path.dirname(document.fileName));
+
+		try {
+			const formatted = await run_formatter(cmd, cwd, document.getText(), ['--full']);
+
+			const fullRange = new vscode.Range(
+				document.positionAt(0),
+				document.positionAt(document.getText().length)
+			);
+
+			await editor.edit(editBuilder => {
+				editBuilder.replace(fullRange, formatted);
+			});
+		} catch (err: any) {
+			vscode.window.showErrorMessage(
+				`${cmd} --full failed: ${err.message ?? err}`
+			);
+		}
+	});
+
 	// ─── check formatters (installed versions) ───────────────────────────────
 
 	const checkFormattersCommand = vscode.commands.registerCommand('ree.checkFormatters', async () => {
-		const doc_uri = vscode.window.activeTextEditor?.document.uri;
-		const config = vscode.workspace.getConfiguration('ree', doc_uri);
-		const selected = config.get<formatter_id>('formatter', 'reefmt');
-
-		const statuses = await check_formatters();
-
-		const lines = statuses.map(s => {
-			const active = s.formatter === selected ? ' (active)' : '';
-
-			if (!s.version) {
-				return `${s.formatter}${active}: not installed`;
-			}
-
-			return `${s.formatter}${active}: ${s.version}`;
-		});
-
-		const summary = lines.join('\n');
+		const version = await check_formatters();
+		const summary = version ? `reettier: ${version}` : 'reettier: not installed';
 		const channel = vscode.window.createOutputChannel('ree Formatters');
 		channel.clear();
 		channel.appendLine(summary);
@@ -364,6 +347,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		formatter,
 		formatCommand,
+		formatWithReprintCommand,
 		checkFormattersCommand,
 		tagProvider,
 		helperProvider,

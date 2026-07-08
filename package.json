@@ -2,7 +2,7 @@
 	"name": "ree-templates",
 	"project-type": "utility",
 	"displayName": "ree Templates",
-	"description": "Syntax highlighting and formatting for REE templates (via reefmt)",
+	"description": "Syntax highlighting and formatting for REE templates (via reettier)",
 	"version": "1.0.42",
 	"publisher": "reepolee",
 	"license": "MIT",
@@ -56,30 +56,15 @@
 			{
 				"command": "ree.checkFormatters",
 				"title": "ree: Check Formatters (path and version)"
+			},
+			{
+				"command": "ree.formatWithReprint",
+				"title": "ree: Format with reprint"
 			}
 		],
 		"configuration": {
 			"title": "ree Templates",
 			"properties": {
-				"ree.formatter": {
-					"type": "string",
-					"enum": [
-						"reefmt",
-						"reettier"
-					],
-					"enumDescriptions": [
-						"AST reprinter - re-derives all line breaks from the syntax tree.",
-						"Indenter only - preserves the line breaks you write, fixes indentation."
-					],
-					"default": "reefmt",
-					"scope": "resource",
-					"description": "Which formatter executable to use for ree templates."
-				},
-				"ree.reefmtPath": {
-					"type": "string",
-					"default": "",
-					"description": "Path to the reefmt executable. Leave empty to use reefmt from PATH."
-				},
 				"ree.reettierPath": {
 					"type": "string",
 					"default": "",
