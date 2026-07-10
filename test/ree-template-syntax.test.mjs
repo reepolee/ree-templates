@@ -11,7 +11,9 @@ test('highlights {@ key } as a translation tag', () => {
 		pattern => pattern.name === 'meta.embedded.translation.ree'
 	);
 
-	const markdownPattern = translationPatterns.find(pattern => pattern.begin === '\\{@');
+	const markdownPattern = translationPatterns.find(pattern =>
+		pattern.begin === '\\{@(?=\\s*[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*\\s*\\})'
+	);
 
 	assert.ok(markdownPattern, 'expected a translation grammar rule for {@ ... }');
 	assert.deepEqual(markdownPattern.patterns, [
@@ -20,4 +22,10 @@ test('highlights {@ key } as a translation tag', () => {
 			match: '[\\w.]+(?=\\s*\\})',
 		},
 	]);
+
+	const directivePattern = grammar.repository['ree-tags'].patterns.find(
+		pattern => pattern.name === 'meta.embedded.directive.ree' && pattern.begin === '\\{@'
+	);
+
+	assert.ok(directivePattern, 'expected the existing {@...} directive rule to remain');
 });
