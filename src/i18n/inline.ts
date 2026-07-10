@@ -3,13 +3,13 @@ import { loadTranslations } from './loader';
 import { getDefaultLocale } from './settings';
 
 /**
- * Regex matching {_ key } and {- key } tags.
+ * Regex matching translation tags.
  */
-const TRANSLATION_TAG_RE = /\{[_-]\s+([\w.]+)\s*\}/g;
+const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
 
 /**
  * Creates and manages inline decorations that show translated values
- * as ghost text after `{_ key }` / `{- key }` tags.
+ * as ghost text after translation tags.
  *
  * Works like i18n ally — you see `{_ hero.title } → Welcome` in the editor.
  */

@@ -827,11 +827,12 @@ The engine is a file-based template compiler inspired by Eta.js and Svelte, opti
 | `{~ expr }` | Unescaped / raw HTML output    | `{~ content.html }`             |
 | `{_ path }` | Translation lookup, escaped    | `{_ labels.text_input }`        |
 | `{- path }` | Translation lookup, unescaped  | `{- descriptions.card }`        |
+| `{@ path }` | Translation lookup, markdown   | `{@ descriptions.card }`        |
 | `{{ ... }}` | Raw JavaScript (double braces) | `{{ const x = items.length; }}` |
 
 HTML escaping converts `& < > " '` to their entity equivalents. Use `{~ }` only when you fully trust the content.
 
-#### Translation lookup tags: `{_ path }` / `{- path }`
+#### Translation lookup tags: `{_ path }` / `{- path }` / `{@ path }`
 
 Use these for every read from `props.translations` (labels, `ui.*`, `errors.*`, `messages.*`,
 `descriptions.*`, `actions.*`, `nav`, `nav_prefix_title`, `nav_auth`, ...). `path` must be a simple
@@ -841,14 +842,18 @@ dotted property path - no arbitrary JS, no computed keys, no function calls:
 {_ ui.title}
 {_ labels.text_input}
 {- descriptions.card}
+{@ descriptions.card}
 ```
 
 `{_ }` HTML-escapes; `{- }` does not, for the rare translation value that legitimately contains markup.
+`{@ }` renders the resolved value through markdown (via `Bun.markdown.html`) to HTML - use it for a
+translation value authored as markdown source (headings, lists, `**bold**`, links). An empty/absent
+value renders nothing.
 On a missing key - including `props.translations` being absent entirely, which is normal while
-scaffolding a route's layout before its translation keys are wired up - both render `{last_segment}`
+scaffolding a route's layout before its translation keys are wired up - all three render `{last_segment}`
 (e.g. `{_ labels.text_input}` on a miss renders `{text_input}`), never throwing and never silently
 rendering empty. This is the same marker convention `mark_missing_from()` (`lib/i18n.ts`) and
-`nav_label()` use elsewhere.
+`nav_label()` use elsewhere. (`{@ }` wraps that `{text_input}` marker in a `<p>` per markdown rules.)
 
 `{= }`/`{~ }` can technically still reach `props.translations` directly (`{= props.translations.ui.title }`)
 but this is discouraged - it bypasses the missing-key marker, so a typo or an unwired key silently
@@ -921,7 +926,7 @@ Includes another template inline. The included template receives a merged copy o
 Any tag whose name contains **at least one hyphen** is treated as a component invocation. The pre-processor converts it internally to `{#include("$components/tag-name", {children: <compiled slot>, attributes: { "type": "red" }})}`.
 
 - Slot content is compiled in the parent's scope and passed as `props.children`
-- HTML attributes are passed as `props.attributes` - template expressions `{= expr }`, `{~ expr }`, `{_ path }`, and `{- path }` inside attribute values ARE compiled, evaluated at render time (e.g. `title="{_ ui.reset_btn }"` resolves against `props.translations` with the same `{last_segment}` miss-marker `{_ }` gives everywhere else)
+- HTML attributes are passed as `props.attributes` - template expressions `{= expr }`, `{~ expr }`, `{_ path }`, and `{- path }` inside attribute values ARE compiled, evaluated at render time (e.g. `title="{_ ui.reset_btn }"` resolves against `props.translations` with the same `{last_segment}` miss-marker `{_ }` gives everywhere else). `{@ path }` is body-only - it emits block-level HTML that can't sit inside a quoted attribute, so it is deliberately not recognized here.
 - Tags **without** a hyphen (e.g. `<banner>`) are treated as literal HTML and passed through unprocessed
 - Reads more like HTML - components can be authored and read in a natural slot/content style
 - The component receives `children` and reads from `props.children` instead of digging into `attributes.text`

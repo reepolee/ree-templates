@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { getTranslationKeys } from './loader';
 
 /**
- * Completion provider for translation keys inside {_ … } and {- … } tags.
+ * Completion provider for translation keys inside translation tags.
  *
  * When the user types inside a translation tag, it offers all available
  * translation keys from en.json / sl.json in the same directory.
@@ -19,8 +19,8 @@ export function createTranslationCompletionProvider(): vscode.CompletionItemProv
 			const line = document.lineAt(position.line).text;
 			const linePrefix = line.slice(0, position.character);
 
-			// Find the last opening {_ or {- tag before cursor
-			const tagMatch = linePrefix.match(/\{[_-]\s+([\w.]*)$/);
+			// Find the last translation tag before the cursor
+			const tagMatch = linePrefix.match(/\{[_@-]\s+([\w.]*)$/);
 			if (!tagMatch) return undefined;
 
 			const partialKey = tagMatch[1];

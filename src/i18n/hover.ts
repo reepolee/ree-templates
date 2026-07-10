@@ -5,12 +5,12 @@ import { getDefaultLocale } from './settings';
 
 /**
  * Regex that matches a translation tag and captures the key path.
- * Matches: {_ ui.title } or {- descriptions.card }
+ * Matches: {_ ui.title }, {- descriptions.card }, or {@ descriptions.card }
  */
-const TRANSLATION_TAG_RE = /\{[_-]\s+([\w.]+)\s*\}/g;
+const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
 
 /**
- * Hover provider for {_ key } and {- key } translation tags in .ree templates.
+ * Hover provider for translation tags in .ree templates.
  *
  * Hovering over a translation key shows the value in all available locales:
  *

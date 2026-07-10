@@ -286,12 +286,13 @@ export function activate(context: vscode.ExtensionContext) {
 		createTranslationHoverProvider()
 	);
 
-	// 2. Completion — suggest translation keys inside {_ / {- tags
+	// 2. Completion — suggest translation keys inside translation tags
 	const translationCompletionProvider = vscode.languages.registerCompletionItemProvider(
 		{ language: 'ree' },
 		createTranslationCompletionProvider(),
 		'_',
 		'-',
+		'@',
 		'.',
 		' '
 	);

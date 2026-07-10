@@ -5,10 +5,10 @@ import * as path from 'path';
 import { findTranslationDirs } from './loader';
 
 /**
- * Regex to match a translation key inside {_ … } or {- … } tags.
- * Uses `g` flag so we can iterate all matches on a line.
+ * Regex to match a translation key inside a translation tag.
+ * Uses the global flag so we can iterate all matches on a line.
  */
-const TRANSLATION_TAG_RE = /\{[_-]\s+([\w.]+)\s*\}/g;
+const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
 
 /**
  * Find the translation tag that contains the cursor position on the given line.
@@ -86,7 +86,7 @@ export function createTranslationRenameProvider(): vscode.RenameProvider {
 			// 1. Update all .ree files in the workspace
 			const reeFiles = await vscode.workspace.findFiles('**/*.ree', '**/node_modules/**');
 			const reeKeyRe = new RegExp(
-				`(\\{[_-]\\s+)${escapeRegex(oldKey)}(\\s*\\})`,
+				`(\\{[_@-]\\s+)${escapeRegex(oldKey)}(\\s*\\})`,
 				'g'
 			);
 

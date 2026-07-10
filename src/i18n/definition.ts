@@ -7,7 +7,7 @@ import { loadTranslations } from './loader';
 /**
  * Regex that matches a translation tag and captures the key path.
  */
-const TRANSLATION_TAG_RE = /\{[_-]\s+([\w.]+)\s*\}/g;
+const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
 
 /**
  * Go To Definition provider for translation keys.

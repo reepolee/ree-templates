@@ -5,9 +5,9 @@ import * as fs from 'fs';
 import { loadTranslations, getTranslationKeys } from './loader';
 
 /**
- * Regex that matches {_ key } and {- key } tags.
+ * Regex that matches translation tags.
  */
-const TRANSLATION_TAG_RE = /\{[_-]\s+([\w.]+)\s*\}/g;
+const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
 
 const DIAGNOSTIC_CODE = 'ree-i18n-unknown-key';
 const DIAGNOSTIC_SOURCE = 'ree-i18n';
@@ -253,5 +253,4 @@ function positionAtEnd(content: string): vscode.Position {
 		lines[lines.length - 1].length
 	);
 }
-
 
