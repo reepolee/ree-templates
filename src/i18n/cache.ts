@@ -68,5 +68,48 @@ export function clearCache(dir?: string): void {
 		cache.delete(dir);
 	} else {
 		cache.clear();
+		dbCache.clear();
 	}
+}
+
+/**
+ * DB-mode cache (reepolee-dev projects). Keyed by a composite
+ * `db:<i18nDir>:<namespace>` string rather than a plain directory, because the
+ * source files all live in a single `.reepolee/i18n/` folder and the resolved
+ * data depends on the .ree file's route namespace. Entries are validated
+ * against the newest mtime of the locale files in `i18nDir`.
+ */
+const dbCache = new Map<string, CacheEntry>();
+
+/**
+ * Newest mtime across the locale JSON files in `i18nDir`, or null if the
+ * directory has no locale files or cannot be read.
+ */
+function newestLocaleMtime(i18nDir: string): number | null {
+	try {
+		const files = fs.readdirSync(i18nDir).filter(f => /^[a-z]{2}(-[A-Z]{2})?\.json$/.test(f));
+		if (files.length === 0) return null;
+		const mtimes = files.map(f => fs.statSync(path.join(i18nDir, f)).mtimeMs);
+		return Math.max(...mtimes);
+	} catch {
+		return null;
+	}
+}
+
+export function getCachedDb(key: string, i18nDir: string): TranslationCache | null {
+	const entry = dbCache.get(key);
+	if (!entry) return null;
+
+	const mtimeMs = newestLocaleMtime(i18nDir);
+	if (mtimeMs === null || mtimeMs > entry.mtimeMs) {
+		dbCache.delete(key);
+		return null;
+	}
+
+	return entry.data;
+}
+
+export function setCachedDb(key: string, i18nDir: string, data: TranslationCache): void {
+	const mtimeMs = newestLocaleMtime(i18nDir);
+	dbCache.set(key, { data, mtimeMs: mtimeMs ?? Date.now() });
 }
