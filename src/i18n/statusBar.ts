@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { getSupportedLanguages, getDefaultLocale, setDefaultLocale } from './settings';
+import { get_default_locale, get_supported_locales, set_default_locale } from './settings';
 
 /**
  * Creates a status bar item that shows the current translation locale.
  *
  * Clicking it opens a Quick Pick to switch between available locales
- * defined in config/supported_languages.ts.
+ * defined in config/supported_locales.ts.
  */
 export function createLocaleStatusBarItem(): vscode.Disposable {
 	const statusBarItem = vscode.window.createStatusBarItem(
@@ -16,7 +16,7 @@ export function createLocaleStatusBarItem(): vscode.Disposable {
 	statusBarItem.tooltip = 'Click to switch translation display language';
 
 	function update() {
-		const locale = getDefaultLocale().toUpperCase();
+		const locale = get_default_locale().toUpperCase();
 		statusBarItem.text = `$(globe) REE: ${locale}`;
 		statusBarItem.show();
 	}
@@ -32,11 +32,11 @@ export function createLocaleStatusBarItem(): vscode.Disposable {
 
 	// Command to switch locale
 	const commandSub = vscode.commands.registerCommand('ree.switchLocale', async () => {
-		const supported = getSupportedLanguages();
-		const current = getDefaultLocale();
+		const supported = get_supported_locales();
+		const current = get_default_locale();
 
 		const items = supported.codes.map(code => ({
-			label: `${code.toUpperCase()} — ${supported.names[code] || code}`,
+			label: `${code.toUpperCase()} - ${supported.names[code] || code}`,
 			description: code === current ? 'current' : '',
 			code,
 		}));
@@ -46,7 +46,7 @@ export function createLocaleStatusBarItem(): vscode.Disposable {
 		});
 
 		if (selected && selected.code !== current) {
-			await setDefaultLocale(selected.code);
+			await set_default_locale(selected.code);
 			update();
 			vscode.commands.executeCommand('ree._refreshInline');
 		}

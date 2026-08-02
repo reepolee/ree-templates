@@ -6,7 +6,7 @@ import { getTranslationKeys } from './loader';
  * Completion provider for translation keys inside translation tags.
  *
  * When the user types inside a translation tag, it offers all available
- * translation keys from en.json / sl.json in the same directory.
+ * translation keys from BCP 47 locale JSON files in the same directory.
  *
  * Supports dot-separated partial matching, e.g. typing "ui.ti" suggests "ui.title".
  */

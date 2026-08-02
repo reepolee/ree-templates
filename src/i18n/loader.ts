@@ -4,18 +4,14 @@ import * as path from 'path';
 import { getCached, setCached, getCachedDb, setCachedDb } from './cache';
 import type { TranslationCache } from './cache';
 import { flatten } from './flatten';
-
-/**
- * Pattern matches locale JSON files: "en.json", "sl.json", "en-US.json", "zh-CN.json", etc.
- */
-const LOCALE_FILE_RE = /^[a-z]{2}(-[A-Z]{2})?\.json$/;
+import { is_locale_file } from './locale_file';
 
 /**
  * Given the file path of a .ree template, return flattened translation data
  * keyed by locale.
  *
  * Two sources are supported, tried in order:
- *  1. ree-web style: locale JSON files (`en.json`, `sl.json`) co-located in the
+ *  1. ree-web style: BCP 47 locale JSON files (`en-US.json`, `sl-SI.json`) co-located in the
  *     same directory as the .ree file.
  *  2. reepolee-dev style ("DB mode"): a `.reepolee/i18n/<lang>.json` working
  *     folder emitted by the dev server from the DB `translations` table. Keys
@@ -43,7 +39,7 @@ function loadSiblingTranslations(reeFilePath: string): TranslationCache | null {
 	// Find locale JSON files in the same directory
 	let files: string[];
 	try {
-		files = fs.readdirSync(dir).filter(f => LOCALE_FILE_RE.test(f));
+		files = fs.readdirSync(dir).filter(is_locale_file);
 	} catch {
 		return null;
 	}
@@ -106,7 +102,7 @@ export function isDbTranslationMode(reeFilePath: string): boolean {
 }
 
 /**
- * reepolee-dev style: resolve translations from `.reepolee/i18n/<lang>.json`.
+ * reepolee-dev style: resolve translations from `.reepolee/i18n/<locale>.json`.
  *
  * Each file holds the full per-language tree. For a given .ree file we mirror
  * the server's per-request resolution (`resolve_translations` in
@@ -126,7 +122,7 @@ function loadDbTranslations(reeFilePath: string): TranslationCache | null {
 
 	let files: string[];
 	try {
-		files = fs.readdirSync(i18nDir).filter(f => LOCALE_FILE_RE.test(f));
+		files = fs.readdirSync(i18nDir).filter(is_locale_file);
 	} catch {
 		return null;
 	}
@@ -238,7 +234,7 @@ export function findTranslationDirs(
 		try {
 			const entries = fs.readdirSync(dir, { withFileTypes: true });
 			const hasLocaleJson = entries.some(
-				e => e.isFile() && LOCALE_FILE_RE.test(e.name)
+				e => e.isFile() && is_locale_file(e.name)
 			);
 			if (hasLocaleJson) {
 				dirs.push(dir);

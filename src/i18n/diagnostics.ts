@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 import { loadTranslations, getTranslationKeys, isDbTranslationMode } from './loader';
+import { is_locale_file, locale_file_name } from './locale_file';
+import { get_supported_locales } from './settings';
 
 /**
  * Regex that matches translation tags.
@@ -83,7 +85,7 @@ export function createTranslationDiagnostics(): {
 
 /**
  * Code Action provider that offers Quick Fixes for unknown translation keys.
- * "Create key in en.json" / "Create key in sl.json"
+ * "Create key in en-US.json" / "Create key in sl-SI.json"
  */
 export function createTranslationCodeActionProvider(): vscode.CodeActionProvider {
 	return {
@@ -109,39 +111,36 @@ export function createTranslationCodeActionProvider(): vscode.CodeActionProvider
 				const dir = path.dirname(document.fileName);
 
 				// Find available locale files
-				let localeFiles: string[];
+				let locale_files: string[];
 				try {
-					localeFiles = fs.readdirSync(dir).filter(f =>
-						/^[a-z]{2}(-[A-Z]{2})?\.json$/.test(f)
-					);
+					locale_files = fs.readdirSync(dir).filter(is_locale_file);
 				} catch {
-					localeFiles = [];
+					locale_files = [];
 				}
 
-				if (localeFiles.length === 0) {
-					// No locale files exist — offer to create both en.json and sl.json
-					const createBothAction = new vscode.CodeAction(
-						'Create en.json and sl.json with this key',
+				if (locale_files.length === 0) {
+					const supported = get_supported_locales();
+					const locale_files = supported.codes.map(locale_file_name);
+					const locale_file_list = locale_files.join(' and ');
+					const create_all_action = new vscode.CodeAction(
+						`Create ${locale_file_list} with this key`,
 						vscode.CodeActionKind.QuickFix
 					);
-					createBothAction.edit = new vscode.WorkspaceEdit();
-					createBothAction.diagnostics = [diagnostic];
-					createBothAction.isPreferred = false;
+					create_all_action.edit = new vscode.WorkspaceEdit();
+					create_all_action.diagnostics = [diagnostic];
+					create_all_action.isPreferred = false;
 
-					const enUri = vscode.Uri.file(path.join(dir, 'en.json'));
-					const enContent = buildNestedJson(key, '');
-					createBothAction.edit.createFile(enUri, { ignoreIfExists: true });
-					createBothAction.edit.insert(enUri, new vscode.Position(0, 0), enContent);
+					for (const locale_file of locale_files) {
+						const uri = vscode.Uri.file(path.join(dir, locale_file));
+						const content = buildNestedJson(key, '');
+						create_all_action.edit.createFile(uri, { ignoreIfExists: true });
+						create_all_action.edit.insert(uri, new vscode.Position(0, 0), content);
+					}
 
-					const slUri = vscode.Uri.file(path.join(dir, 'sl.json'));
-					const slContent = buildNestedJson(key, '');
-					createBothAction.edit.createFile(slUri, { ignoreIfExists: true });
-					createBothAction.edit.insert(slUri, new vscode.Position(0, 0), slContent);
-
-					actions.push(createBothAction);
+					actions.push(create_all_action);
 				} else {
 					// One action per existing locale file
-					for (const file of localeFiles) {
+					for (const file of locale_files) {
 						const filePath = path.join(dir, file);
 						const locale = file.replace(/\.json$/, '');
 
@@ -258,4 +257,3 @@ function positionAtEnd(content: string): vscode.Position {
 		lines[lines.length - 1].length
 	);
 }
-

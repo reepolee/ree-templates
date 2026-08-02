@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { findTranslationDirs, isDbTranslationMode } from './loader';
+import { is_locale_file } from './locale_file';
 
 /**
  * Regex to match a translation key inside a translation tag.
@@ -44,7 +45,7 @@ function findTagAtPosition(
  *
  * Renaming a key (F2) inside a `{_ key }` tag updates:
  * - All occurrences of the key in all .ree files across the workspace
- * - All occurrences in locale JSON files (en.json, sl.json, etc.)
+ * - All occurrences in BCP 47 locale JSON files (en-US.json, sl-SI.json, etc.)
  */
 export function createTranslationRenameProvider(): vscode.RenameProvider {
 	return {
@@ -123,9 +124,7 @@ export function createTranslationRenameProvider(): vscode.RenameProvider {
 			const translationDirs = findTranslationDirs(rootPath);
 
 			for (const dir of translationDirs) {
-				const files = fs.readdirSync(dir).filter(f =>
-					/^[a-z]{2}(-[A-Z]{2})?\.json$/.test(f)
-				);
+				const files = fs.readdirSync(dir).filter(is_locale_file);
 
 				for (const file of files) {
 					const filePath = path.join(dir, file);

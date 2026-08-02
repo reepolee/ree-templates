@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { loadTranslations } from './loader';
-import { getDefaultLocale } from './settings';
+import { get_default_locale } from './settings';
 
 /**
  * Regex that matches a translation tag and captures the key path.
@@ -46,7 +46,7 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 				const translations = loadTranslations(document.fileName);
 				if (!translations) return undefined;
 
-				const defaultLocale = getDefaultLocale();
+				const default_locale = get_default_locale();
 				const md = new vscode.MarkdownString();
 				md.isTrusted = true;
 				md.supportHtml = true;
@@ -54,27 +54,27 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 				md.appendMarkdown(`**Translation key:** \`${key}\`\n\n`);
 
 				// Show the selected/default locale first with emphasis
-				const defaultData = translations[defaultLocale];
-				const defaultVal = defaultData?.[key];
+				const default_data = translations[default_locale];
+				const default_value = default_data?.[key];
 
-				if (defaultVal !== undefined) {
-					md.appendCodeblock(defaultVal, 'text');
-					md.appendMarkdown(`⭐ **${defaultLocale.toUpperCase()}** *(default)*\n\n`);
+				if (default_value !== undefined) {
+					md.appendCodeblock(default_value, 'text');
+					md.appendMarkdown(`⭐ **${default_locale.toUpperCase()}** *(default)*\n\n`);
 				}
 
 				// Then show all other locales
 				let hasOthers = false;
 				for (const [locale, data] of Object.entries(translations)) {
-					if (locale === defaultLocale) continue;
+					if (locale === default_locale) continue;
 					const value = data[key];
 					if (value !== undefined) {
 						hasOthers = true;
 						md.appendCodeblock(value, 'text');
-						md.appendMarkdown(`— *${locale.toUpperCase()}*\n\n`);
+						md.appendMarkdown(`- *${locale.toUpperCase()}*\n\n`);
 					}
 				}
 
-				if (defaultVal === undefined && !hasOthers) {
+				if (default_value === undefined && !hasOthers) {
 					md.appendMarkdown('_(key not found in any locale)_');
 				}
 

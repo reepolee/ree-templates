@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { loadTranslations } from './loader';
-import { getDefaultLocale } from './settings';
+import { get_default_locale } from './settings';
 
 /**
  * Regex matching translation tags.
@@ -26,7 +26,7 @@ export function createInlineDecorations(): vscode.Disposable & { refresh: () => 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
 	function update() {
-		const defaultLocale = getDefaultLocale();
+		const default_locale = get_default_locale();
 
 		for (const editor of vscode.window.visibleTextEditors) {
 			if (editor.document.languageId !== 'ree') continue;
@@ -39,8 +39,8 @@ export function createInlineDecorations(): vscode.Disposable & { refresh: () => 
 			}
 
 			// Use the configured locale, fall back to first available
-			const displayData = translations[defaultLocale] ?? Object.values(translations)[0];
-			if (!displayData) {
+			const display_data = translations[default_locale] ?? Object.values(translations)[0];
+			if (!display_data) {
 				editor.setDecorations(decorationType, []);
 				continue;
 			}
@@ -51,7 +51,7 @@ export function createInlineDecorations(): vscode.Disposable & { refresh: () => 
 
 			while ((match = TRANSLATION_TAG_RE.exec(text)) !== null) {
 				const key = match[1];
-				const value = displayData[key];
+				const value = display_data[key];
 
 				if (value !== undefined) {
 					const range = new vscode.Range(

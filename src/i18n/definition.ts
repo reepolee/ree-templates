@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { loadTranslations } from './loader';
+import { is_locale_file, locale_file_name } from './locale_file';
+import { get_supported_locales } from './settings';
 
 /**
  * Regex that matches a translation tag and captures the key path.
@@ -13,7 +15,7 @@ const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
  * Go To Definition provider for translation keys.
  *
  * Ctrl+Click on a translation key inside `{_ hero.title }` opens the
- * en.json file at the line where that key is defined.
+ * configured default locale file at the line where that key is defined.
  */
 export function createTranslationDefinitionProvider(): vscode.DefinitionProvider {
 	return {
@@ -38,18 +40,23 @@ export function createTranslationDefinitionProvider(): vscode.DefinitionProvider
 				const key = match[1];
 				const dir = path.dirname(document.fileName);
 
-				// Try en.json first, then sl.json, then any other locale file
-				const candidates = ['en.json', 'sl.json'];
+				const supported = get_supported_locales();
+				const preferred_files = [
+					locale_file_name(supported.default_locale),
+					...supported.codes
+						.filter(locale => locale !== supported.default_locale)
+						.map(locale_file_name),
+				];
 				const files = fs.existsSync(dir)
-					? fs.readdirSync(dir).filter(f => /^[a-z]{2}(-[A-Z]{2})?\.json$/.test(f))
+					? fs.readdirSync(dir).filter(is_locale_file)
 					: [];
 
-				const orderedFiles = [
-					...candidates.filter(f => files.includes(f)),
-					...files.filter(f => !candidates.includes(f)),
+				const ordered_files = [
+					...preferred_files.filter(file => files.includes(file)),
+					...files.filter(file => !preferred_files.includes(file)),
 				];
 
-				for (const file of orderedFiles) {
+				for (const file of ordered_files) {
 					const filePath = path.join(dir, file);
 					try {
 						const content = fs.readFileSync(filePath, 'utf-8');

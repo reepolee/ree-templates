@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { is_locale_file } from './locale_file';
 
 /**
  * Flattened translation data per locale.
@@ -32,7 +33,7 @@ export function getCached(dir: string): TranslationCache | null {
 	}
 
 	try {
-		const files = fs.readdirSync(dir).filter(f => /^[a-z]{2}(-[A-Z]{2})?\.json$/.test(f));
+		const files = fs.readdirSync(dir).filter(is_locale_file);
 
 		for (const file of files) {
 			const stat = fs.statSync(path.join(dir, file));
@@ -52,7 +53,7 @@ export function getCached(dir: string): TranslationCache | null {
 
 export function setCached(dir: string, data: TranslationCache): void {
 	try {
-		const files = fs.readdirSync(dir).filter(f => /^[a-z]{2}(-[A-Z]{2})?\.json$/.test(f));
+		const files = fs.readdirSync(dir).filter(is_locale_file);
 		const mtimeMs = Math.max(
 			0,
 			...files.map(f => fs.statSync(path.join(dir, f)).mtimeMs)
@@ -87,7 +88,7 @@ const dbCache = new Map<string, CacheEntry>();
  */
 function newestLocaleMtime(i18nDir: string): number | null {
 	try {
-		const files = fs.readdirSync(i18nDir).filter(f => /^[a-z]{2}(-[A-Z]{2})?\.json$/.test(f));
+		const files = fs.readdirSync(i18nDir).filter(is_locale_file);
 		if (files.length === 0) return null;
 		const mtimes = files.map(f => fs.statSync(path.join(i18nDir, f)).mtimeMs);
 		return Math.max(...mtimes);

@@ -72,7 +72,7 @@
 				},
 				"ree.translation.defaultLocale": {
 					"type": "string",
-					"default": "en",
+					"default": "en-US",
 					"scope": "window",
 					"description": "Default locale to display in inline translation decorations and hover."
 				}
