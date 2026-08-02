@@ -42,7 +42,7 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 					continue;
 				}
 
-				// Cursor is inside a valid translation tag — show hover
+				// Cursor is inside a valid translation tag - show hover
 				const translations = loadTranslations(document.fileName);
 				if (!translations) return undefined;
 

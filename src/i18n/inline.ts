@@ -11,7 +11,7 @@ const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
  * Creates and manages inline decorations that show translated values
  * as ghost text after translation tags.
  *
- * Works like i18n ally — you see `{_ hero.title } → Welcome` in the editor.
+ * Works like i18n ally - you see `{_ hero.title } → Welcome` in the editor.
  */
 export function createInlineDecorations(): vscode.Disposable & { refresh: () => void } {
 	const decorationType = vscode.window.createTextEditorDecorationType({
