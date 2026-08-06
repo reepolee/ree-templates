@@ -83,3 +83,23 @@ test('inlines a template-expression attribute by splicing the raw expression', (
 
 	assert.equal(inlined, `<span class={= is_new ? 'NEW' : '' ? 'pill' : '' }></span>`);
 });
+
+test('inlines a plain string attribute into a quoted HTML attribute value without extra quotes', () => {
+	const component_source = `<input value="{~ props.attributes.foo }">`;
+	const tag = find_ree_tag_at(`<date-field foo="2024-01-01"></date-field>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<input value="2024-01-01">`);
+});
+
+test('inlines a template-expression attribute into a quoted HTML attribute value as a tag', () => {
+	const component_source = `<input value="{~ props.attributes.foo }">`;
+	const tag = find_ree_tag_at(`<date-field foo={~ record.iso_date }></date-field>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<input value="{~ record.iso_date }">`);
+});
