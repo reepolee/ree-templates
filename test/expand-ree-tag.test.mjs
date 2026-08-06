@@ -124,12 +124,180 @@ test('inlines string interpolation in attributes without double-quoting', () => 
 	assert.equal(inlined, `<validation-error id="error-primary_color"></validation-error>`);
 });
 
-test('inlines template expressions with complex expressions into quoted attribute values', () => {
+// A reference that is only part of a larger expression cannot collapse its
+// tag, so the value is spliced in place. Inside a tag body that is a JS
+// expression position: a plain string has to become a string literal to stay
+// valid, and the surviving `|| fallback` is then dead code only the developer
+// can resolve - hence the marker.
+
+test('splices a string value as a literal inside a fallback expression and flags it', () => {
 	const component_source = `<input value="{~ props.attributes.value || '#000000' }">`;
 	const tag = find_ree_tag_at(`<input-color value="#ff0000"></input-color>`, 0);
 
 	assert.ok(tag);
 	const inlined = inline_component(component_source, tag);
 
-	assert.equal(inlined, `<input value="{~ #ff0000 || '#000000' }">`);
+	assert.match(inlined, /value="\{~ '#ff0000' \|\| '#000000' \}"/);
+	assert.match(inlined, /<!-- TODO: expression needs manual review/);
+});
+
+test('splices an expression value into a fallback expression without flagging it', () => {
+	const component_source = `<input value="{~ props.attributes.value || '#000000' }">`;
+	const tag = find_ree_tag_at(`<input-color value={= record.color }></input-color>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<input value="{~ record.color || '#000000' }">`);
+});
+
+test('does not flag a reference that is the whole tag body', () => {
+	const component_source = `<input value="{~ props.attributes.value }">`;
+	const tag = find_ree_tag_at(`<input-color value="#ff0000"></input-color>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<input value="#ff0000">`);
+});
+
+// `{#with props.attributes}` compiles to a native JS `with` statement, so a
+// bare `label` and an explicit `props.attributes.label` are the same reference
+// inside the block. Expansion supports both and must agree on the result.
+
+test('expands bare references inside a {#with props.attributes} block', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t<label for="{= name }">{= label }</label>',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<x-field name="primary_color" label="Primary color"></x-field>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<label for="primary_color">Primary color</label>`);
+});
+
+test('expands both component styles to identical output', () => {
+	const with_style = [
+		'{#with props.attributes}',
+		'\t<label for="{= name }">{= label }</label>',
+		"\t<input value=\"{~ value || '#000000' }\" />",
+		'{/with}',
+	].join('\n');
+	const dotted_style = [
+		'<label for="{= props.attributes.name }">{= props.attributes.label }</label>',
+		"<input value=\"{~ props.attributes.value || '#000000' }\" />",
+	].join('\n');
+	const call_site = `<input-color name="primary_color" label="Primary color" value="#ff0000"></input-color>`;
+
+	const with_tag = find_ree_tag_at(call_site, 0);
+	const dotted_tag = find_ree_tag_at(call_site, 0);
+	assert.ok(with_tag);
+	assert.ok(dotted_tag);
+
+	const from_with = inline_component(with_style, with_tag);
+	const from_dotted = inline_component(dotted_style, dotted_tag);
+
+	assert.equal(from_with, from_dotted);
+	assert.match(from_with, /<label for="primary_color">Primary color<\/label>/);
+});
+
+// A nested `{#with}` layers another object in front of the scope chain, so
+// whether a bare name resolves to it or falls through to props.attributes
+// depends on runtime shape. Skipping those bodies is correct either way.
+
+test('leaves bare references inside a nested {#with} block untouched', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t<h2>{= label }</h2>',
+		'\t{#with address}',
+		'\t\t<p>{= label }</p>',
+		'\t{/with}',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<x-card label="Hi"></x-card>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.match(inlined, /<h2>Hi<\/h2>/);
+	assert.match(inlined, /\{#with address\}/);
+	assert.match(inlined, /<p>\{= label \}<\/p>/);
+});
+
+test('leaves references shadowed by an {#each} binding untouched', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t<h2>{= label }</h2>',
+		'\t{#each roles as label}',
+		'\t\t<span>{= label }</span>',
+		'\t{/each}',
+		'\t<p>{= label }</p>',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<role-list label="Roles"></role-list>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.match(inlined, /<span>\{= label \}<\/span>/);
+	assert.match(inlined, /<h2>Roles<\/h2>/);
+	assert.match(inlined, /<p>Roles<\/p>/);
+});
+
+test('only substitutes bare names the call site actually passes', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t<p>{= label }</p>',
+		'\t<p>{= subtitle }</p>',
+		"\t<p>{= 'label' }</p>",
+		'\t<p>{= record.label }</p>',
+		'\t<p>{= label(1) }</p>',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<x-card label="Hi"></x-card>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.match(inlined, /<p>Hi<\/p>/);
+	assert.match(inlined, /<p>\{= subtitle \}<\/p>/);
+	assert.match(inlined, /<p>\{= 'label' \}<\/p>/);
+	assert.match(inlined, /<p>\{= record\.label \}<\/p>/);
+	assert.match(inlined, /<p>\{= label\(1\) \}<\/p>/);
+});
+
+test('expands every {#with props.attributes} block, not just the first', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t<h2>{= label }</h2>',
+		'{/with}',
+		'<hr />',
+		'{#with props.attributes}',
+		'\t<p>{= label }</p>',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<x-card label="Hi"></x-card>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<h2>Hi</h2>\n<hr />\n<p>Hi</p>`);
+});
+
+test('expands a component mixing bare and dotted references', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t<h2>{= label }</h2>',
+		'\t<p>{= props.attributes.label }</p>',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<x-card label="Hi"></x-card>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<h2>Hi</h2>\n<p>Hi</p>`);
 });
