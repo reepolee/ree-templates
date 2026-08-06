@@ -22,7 +22,6 @@ import { ParsedAttribute, ParsedReeTag } from './tag_parser';
  */
 export function inline_component(component_source: string, tag: ParsedReeTag): string {
 	let result = component_source;
-	let has_fallback = false;
 
 	for (const attribute of tag.attributes) {
 		const attr_path_variants = [
@@ -30,9 +29,6 @@ export function inline_component(component_source: string, tag: ParsedReeTag): s
 			`props.attributes["${attribute.name}"]`,
 			`props.attributes['${attribute.name}']`,
 		];
-		if (attribute.raw_value.includes('||') || attribute.raw_value.includes('??')) {
-			has_fallback = true;
-		}
 		result = replace_reference(
 			result,
 			attr_path_variants,
@@ -43,10 +39,6 @@ export function inline_component(component_source: string, tag: ParsedReeTag): s
 	}
 
 	result = replace_reference(result, ['props.children'], tag.slot_content.trim());
-
-	if (has_fallback) {
-		result = `<!-- TODO: verify fallback expressions were inlined correctly -->\n${result}`;
-	}
 
 	return result;
 }
