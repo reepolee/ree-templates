@@ -34,7 +34,8 @@ export function inline_component(component_source: string, tag: ParsedReeTag): s
 			attr_path_variants,
 			expression_literal_for(attribute.raw_value),
 			unwrap_tag_value(attribute.raw_value),
-			text_or_template_value_for(attribute.raw_value)
+			text_or_template_value_for(attribute.raw_value),
+			is_plain_string_value(attribute.raw_value)
 		);
 	}
 
@@ -98,6 +99,19 @@ function text_or_template_value_for(raw_value: string): string {
 }
 
 /**
+ * Reports whether a call-site value is a plain string (`value="#ff0000"`)
+ * rather than a template expression (`value={= record.color }`). Plain strings
+ * are the case where splicing into a larger expression is suspect: the
+ * component author wrote the surrounding expression expecting a variable, and
+ * a frozen literal usually makes the rest of it (a `|| fallback`, a ternary)
+ * dead code that only the developer can resolve.
+ */
+function is_plain_string_value(raw_value: string): boolean {
+	const trimmed = raw_value.trim();
+	return !/^\{[=~]\s*[\s\S]*\}$/.test(trimmed);
+}
+
+/**
  * Replaces every occurrence of any of `needle_variants` in `source` with
  * `replacement`. When a needle is the entire body of a `{= ... }` / `{~ ... }`
  * tag (the common case: `{= props.children }`, `{= props.attributes.foo }`),
@@ -110,13 +124,18 @@ function text_or_template_value_for(raw_value: string): string {
  *  - `attribute_value_replacement`: For quoted HTML attributes (`="value"` or `value="{~ expr }"`)
  *  - `text_content_replacement`: For bare text/string contexts (text nodes and string interpolation)
  *  - `replacement`: For bare JS expressions (`class={= expr }`)
+ *
+ * `flag_partial_splices` marks partial splices (where the reference is only
+ * part of a larger expression) with a TODO comment - see
+ * `replace_partial_references`.
  */
 function replace_reference(
 	source: string,
 	needle_variants: string[],
 	replacement: string,
 	attribute_value_replacement?: string,
-	text_content_replacement?: string
+	text_content_replacement?: string,
+	flag_partial_splices?: boolean
 ): string {
 	let result = source;
 
@@ -143,11 +162,79 @@ function replace_reference(
 			}
 			result = result.slice(0, index_info.start) + replacement_text + result.slice(index_info.end);
 		}
-		const bare_replacement = text_content_replacement !== undefined ? text_content_replacement : replacement;
-		result = result.split(needle).join(bare_replacement);
+		result = replace_partial_references(
+			result,
+			needle,
+			replacement,
+			text_content_replacement,
+			flag_partial_splices
+		);
 	}
 
 	return result;
+}
+
+/**
+ * Handles references that are only part of a larger expression, e.g.
+ * `value="{~ props.attributes.value || '#000000' }"`. The surrounding tag
+ * cannot be collapsed, so the reference is spliced in place: inside a
+ * `{= ... }` / `{~ ... }` body that is a JS expression position, so a plain
+ * string value must be spliced as a string literal. Outside a tag it is plain
+ * text interpolation and the raw value is used.
+ *
+ * When the spliced value is a frozen string literal the rest of the expression
+ * (`|| '#000000'`) becomes dead code the expansion cannot resolve on the
+ * developer's behalf, so `flag_splices` marks those lines with a TODO. A
+ * spliced expression needs no such flag - the result is still live template
+ * code that behaves exactly as it did before inlining.
+ */
+function replace_partial_references(
+	source: string,
+	needle: string,
+	expression_replacement: string,
+	text_replacement?: string,
+	flag_splices?: boolean
+): string {
+	let result = source;
+	let search_from = 0;
+
+	while (true) {
+		const found_at = result.indexOf(needle, search_from);
+		if (found_at === -1) break;
+
+		const inside_tag = is_inside_expression_tag(result, found_at);
+		const replacement_text = inside_tag ? expression_replacement : (text_replacement ?? expression_replacement);
+		result = result.slice(0, found_at) + replacement_text + result.slice(found_at + needle.length);
+		search_from = found_at + replacement_text.length;
+
+		if (!flag_splices || !inside_tag) continue;
+
+		const line_end = end_of_line_at(result, search_from);
+		result = result.slice(0, line_end) + TODO_MARKER + result.slice(line_end);
+		search_from = line_end + TODO_MARKER.length;
+	}
+
+	return result;
+}
+
+const TODO_MARKER = ' <!-- TODO: expression needs manual review, the surrounding template could not be evaluated -->';
+
+/**
+ * Reports whether `offset` sits inside a `{= ... }` / `{~ ... }` tag body,
+ * by scanning back for the nearest unclosed tag opener.
+ */
+function is_inside_expression_tag(source: string, offset: number): boolean {
+	const before = source.slice(0, offset);
+	const open_at = Math.max(before.lastIndexOf('{='), before.lastIndexOf('{~'));
+	if (open_at === -1) return false;
+
+	const close_at = before.indexOf('}', open_at);
+	return close_at === -1;
+}
+
+function end_of_line_at(source: string, offset: number): number {
+	const newline_at = source.indexOf('\n', offset);
+	return newline_at === -1 ? source.length : newline_at;
 }
 
 function escape_regex(text: string): string {
