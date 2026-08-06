@@ -84,11 +84,21 @@ function expression_literal_for(raw_value: string): string {
  *
  * Plain strings are returned as-is (unquoted), while template expressions are
  * preserved as-is. This handles both text nodes and contexts like `id="error-{expr}"`.
+ *
+ * Note: Complex `{~}` expressions with fallbacks (e.g. `{~ value || fallback }`)
+ * cannot be statically evaluated without running the template compiler, so they
+ * may need manual cleanup after inlining.
  */
 function text_or_template_value_for(raw_value: string): string {
 	const trimmed = raw_value.trim();
 	const tag_match = trimmed.match(/^\{[=~]\s*([\s\S]*)\}$/);
-	if (tag_match) return tag_match[1].trim();
+	if (tag_match) {
+		const expr = tag_match[1].trim();
+		if (tag_match[1].includes('||') || tag_match[1].includes('??')) {
+			// TODO: Cannot statically evaluate template fallback expressions
+		}
+		return expr;
+	}
 
 	return trimmed;
 }
