@@ -92,13 +92,7 @@ function expression_literal_for(raw_value: string): string {
 function text_or_template_value_for(raw_value: string): string {
 	const trimmed = raw_value.trim();
 	const tag_match = trimmed.match(/^\{[=~]\s*([\s\S]*)\}$/);
-	if (tag_match) {
-		const expr = tag_match[1].trim();
-		if (tag_match[1].includes('||') || tag_match[1].includes('??')) {
-			// TODO: Cannot statically evaluate template fallback expressions
-		}
-		return expr;
-	}
+	if (tag_match) return tag_match[1].trim();
 
 	return trimmed;
 }
