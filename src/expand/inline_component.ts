@@ -1,4 +1,5 @@
 import { ParsedAttribute, ParsedReeTag } from './tag_parser';
+import { expand_with_attributes, WithSubstitution } from './with_context';
 
 /**
  * Rewrites a component's source so it no longer depends on `props.attributes`
@@ -18,10 +19,18 @@ import { ParsedAttribute, ParsedReeTag } from './tag_parser';
  *    `type="red"`) becomes a string literal (`'red'`) and a `{= expr }` value
  *    is spliced in as-is.
  *
+ * Components written in the preferred `{#with props.attributes}` style refer
+ * to their props as bare names (`{= label }`), so those blocks are expanded
+ * first - see `expand_with_attributes`.
+ *
  * `props.children` is replaced by the tag's compiled slot content.
  */
 export function inline_component(component_source: string, tag: ParsedReeTag): string {
-	let result = component_source;
+	let result = expand_with_attributes(
+		component_source,
+		with_substitutions_for(tag),
+		mark_partial_splice
+	);
 
 	for (const attribute of tag.attributes) {
 		const attr_path_variants = [
@@ -42,6 +51,32 @@ export function inline_component(component_source: string, tag: ParsedReeTag): s
 	result = replace_reference(result, ['props.children'], tag.slot_content.trim());
 
 	return result;
+}
+
+/**
+ * Builds the per-attribute values used to substitute bare references inside a
+ * `{#with props.attributes}` block, from the same helpers the dotted-path
+ * substitution uses - so a component expands identically in either style.
+ */
+function with_substitutions_for(tag: ParsedReeTag): Map<string, WithSubstitution> {
+	const substitutions = new Map<string, WithSubstitution>();
+
+	for (const attribute of tag.attributes) {
+		substitutions.set(attribute.name, {
+			expression_value: expression_literal_for(attribute.raw_value),
+			text_value: unwrap_tag_value(attribute.raw_value),
+			flag_partial_splices: is_plain_string_value(attribute.raw_value),
+		});
+	}
+
+	return substitutions;
+}
+
+/**
+ * Appends the review marker to a line holding a partial splice.
+ */
+function mark_partial_splice(line: string): string {
+	return `${line}${TODO_MARKER}`;
 }
 
 /**
