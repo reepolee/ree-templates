@@ -33,7 +33,8 @@ export function inline_component(component_source: string, tag: ParsedReeTag): s
 			result,
 			attr_path_variants,
 			expression_literal_for(attribute.raw_value),
-			unwrap_tag_value(attribute.raw_value)
+			unwrap_tag_value(attribute.raw_value),
+			text_or_template_value_for(attribute.raw_value)
 		);
 	}
 
@@ -60,13 +61,13 @@ function unwrap_tag_value(raw_value: string): string {
 
 /**
  * Converts an attribute's raw source text into the expression that should
- * be spliced into the component body in place of `props.attributes.X`.
+ * be spliced into a bare JS expression context (e.g. `class={= ... }`).
  *
  * A raw value that is itself a single `{= expr }` / `{~ expr }` tag is
  * unwrapped to its inner expression, so e.g. `badge={= is_new ? 'NEW' : '' }`
  * inlines as `is_new ? 'NEW' : ''` rather than the literal text `"{= ... }"`.
  * Anything else (a plain string attribute like `type="red"`) becomes a
- * single-quoted string literal.
+ * single-quoted string literal, since bare JS contexts need proper string literals.
  */
 function expression_literal_for(raw_value: string): string {
 	const trimmed = raw_value.trim();
@@ -78,6 +79,21 @@ function expression_literal_for(raw_value: string): string {
 }
 
 /**
+ * Converts an attribute's raw source text into a form suitable for splicing
+ * into text content or string interpolation contexts (outside HTML attributes).
+ *
+ * Plain strings are returned as-is (unquoted), while template expressions are
+ * preserved as-is. This handles both text nodes and contexts like `id="error-{expr}"`.
+ */
+function text_or_template_value_for(raw_value: string): string {
+	const trimmed = raw_value.trim();
+	const tag_match = trimmed.match(/^\{[=~]\s*([\s\S]*)\}$/);
+	if (tag_match) return tag_match[1].trim();
+
+	return trimmed;
+}
+
+/**
  * Replaces every occurrence of any of `needle_variants` in `source` with
  * `replacement`. When a needle is the entire body of a `{= ... }` / `{~ ... }`
  * tag (the common case: `{= props.children }`, `{= props.attributes.foo }`),
@@ -86,28 +102,45 @@ function expression_literal_for(raw_value: string): string {
  * full `{= expr }` tag (e.g. slot content authored as `{= product.name }`),
  * and `{= {= product.name } }` is not valid Ree syntax.
  *
- * When that whole-tag match falls inside a quoted HTML attribute value
- * (`="{~ needle }"` / `='{~ needle }'`), `attribute_value_replacement` is
- * spliced in instead of `replacement` - the surrounding quotes already
- * delimit the value, so it must not be re-wrapped in a JS string literal.
+ * Context-aware replacements:
+ *  - `attribute_value_replacement`: For quoted HTML attributes (`="value"` or `value="{~ expr }"`)
+ *  - `text_content_replacement`: For bare text/string contexts (text nodes and string interpolation)
+ *  - `replacement`: For bare JS expressions (`class={= expr }`)
  */
 function replace_reference(
 	source: string,
 	needle_variants: string[],
 	replacement: string,
-	attribute_value_replacement?: string
+	attribute_value_replacement?: string,
+	text_content_replacement?: string
 ): string {
 	let result = source;
 
 	for (const needle of needle_variants) {
 		const whole_tag_re = new RegExp(`(=(["']))?\\{[=~]\\s*${escape_regex(needle)}\\s*\\}(\\2)?`, 'g');
-		result = result.replace(whole_tag_re, (full_match, quote_prefix, quote_char) => {
-			if (quote_prefix && attribute_value_replacement !== undefined) {
-				return `=${quote_char}${attribute_value_replacement}${quote_char}`;
+		const indices: Array<{ start: number; end: number; match: RegExpExecArray }> = [];
+		let match: RegExpExecArray | null;
+		while ((match = whole_tag_re.exec(result)) !== null) {
+			indices.push({ start: match.index, end: match.index + match[0].length, match });
+		}
+		for (let i = indices.length - 1; i >= 0; i--) {
+			const index_info = indices[i];
+			const match_obj = index_info.match;
+			const eq_and_quote = match_obj[1];
+			const quote_char = match_obj[2];
+			let replacement_text: string;
+			if (eq_and_quote && attribute_value_replacement !== undefined) {
+				replacement_text = `${eq_and_quote}${attribute_value_replacement}${quote_char}`;
+			} else if (eq_and_quote) {
+				replacement_text = `${eq_and_quote}${replacement}${quote_char}`;
+			} else {
+				const is_bare_attribute = index_info.start > 0 && result[index_info.start - 1] === '=';
+				replacement_text = is_bare_attribute ? replacement : (text_content_replacement ?? replacement);
 			}
-			return quote_prefix ? `${quote_prefix}${replacement}${quote_char}` : replacement;
-		});
-		result = result.split(needle).join(replacement);
+			result = result.slice(0, index_info.start) + replacement_text + result.slice(index_info.end);
+		}
+		const bare_replacement = text_content_replacement !== undefined ? text_content_replacement : replacement;
+		result = result.split(needle).join(bare_replacement);
 	}
 
 	return result;

@@ -103,3 +103,33 @@ test('inlines a template-expression attribute into a quoted HTML attribute value
 
 	assert.equal(inlined, `<input value="{~ record.iso_date }">`);
 });
+
+test('inlines text content attributes without wrapping in quotes', () => {
+	const component_source = `<label>{= props.attributes.label }</label>`;
+	const tag = find_ree_tag_at(`<field-label label="Primary color"></field-label>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<label>Primary color</label>`);
+});
+
+test('inlines string interpolation in attributes without double-quoting', () => {
+	const component_source = `<validation-error id="error-{= props.attributes.name }"></validation-error>`;
+	const tag = find_ree_tag_at(`<form-field name="primary_color"></form-field>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<validation-error id="error-primary_color"></validation-error>`);
+});
+
+test('inlines template expressions with complex expressions into quoted attribute values', () => {
+	const component_source = `<input value="{~ props.attributes.value || '#000000' }">`;
+	const tag = find_ree_tag_at(`<input-color value="#ff0000"></input-color>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.equal(inlined, `<input value="{~ #ff0000 || '#000000' }">`);
+});
