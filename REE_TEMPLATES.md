@@ -940,6 +940,10 @@ Any tag whose name contains **at least one hyphen** is treated as a component in
 
 Use this form when the props object itself must be built dynamically (computed keys, spread operator, conditional inclusion of fields). For static attributes, prefer ReeTag - it reads more like HTML and the component receives `children` naturally.
 
+**Expanding a ReeTag inline:**
+
+Run `ree: Expand ReeTag (inline component here)` (command palette, or right-click inside the tag) with the cursor on a `<tag-name>` invocation to replace the tag with the actual body of `components/tag-name.ree`, substituting each attribute and the slot content directly in place of `props.attributes.*` and `props.children`. Use this when a specific call site needs more control than the shared component allows (e.g. a form that needs to branch on internal markup) and extending the component itself isn't the right fix - the caller gets its own local copy to diverge from, and the original component is untouched.
+
 #### `<auto-complete>` component
 
 The `<auto-complete>` component (`components/auto-complete.ree`) renders a searchable dropdown for foreign key fields with live search, keyboard navigation, and autoscroll.

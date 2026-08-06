@@ -19,6 +19,12 @@ indentation.
   the installed version of `reettier`, looked up by its own name on PATH (so a
   path shim does not mask the real version). A missing CLI shows as
   `not installed`.
+- **ree: Expand ReeTag (inline component here)** (`ree.expandReeTag`) - with the
+  cursor on a `<tag-name>` ReeTag, replaces it with the body of
+  `components/tag-name.ree`, substituting each attribute and the slot content
+  in place of `props.attributes.*` / `props.children`. Use this to break a
+  single call site off from the shared component when it needs more control
+  than the component itself should offer.
 
 ## Settings
 

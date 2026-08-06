@@ -16,6 +16,12 @@ import { createTranslationRenameProvider } from './i18n/rename';
 import { createInlineDecorations } from './i18n/inline';
 import { createLocaleStatusBarItem } from './i18n/statusBar';
 
+// ─── ReeTag expansion ───────────────────────────────────────────────────────
+
+import { find_ree_tag_at } from './expand/tag_parser';
+import { resolve_component_path, read_component_source } from './expand/component_resolver';
+import { inline_component } from './expand/inline_component';
+
 // ─── IntelliSense Data ──────────────────────────────────────────────────────
 
 interface ReeCompletion {
@@ -242,6 +248,44 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// ─── expand ReeTag (replace call site with the component's own body) ───
+
+	const expandReeTagCommand = vscode.commands.registerCommand('ree.expandReeTag', async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || editor.document.languageId !== 'ree') {
+			return;
+		}
+
+		const document = editor.document;
+		const source = document.getText();
+		const offset = document.offsetAt(editor.selection.active);
+
+		const tag = find_ree_tag_at(source, offset);
+		if (!tag) {
+			vscode.window.showErrorMessage('No ReeTag (custom-element with a hyphen) found at the cursor.');
+			return;
+		}
+
+		const projectRoot = findProjectRoot(path.dirname(document.fileName));
+		const componentPath = resolve_component_path(projectRoot, tag.tag_name);
+		if (!componentPath) {
+			vscode.window.showErrorMessage(
+				`Could not find components/${tag.tag_name}.ree under ${projectRoot}.`
+			);
+			return;
+		}
+
+		const componentSource = read_component_source(componentPath);
+		const inlined = inline_component(componentSource, tag);
+
+		const startPos = document.positionAt(tag.start);
+		const endPos = document.positionAt(tag.end);
+
+		await editor.edit(editBuilder => {
+			editBuilder.replace(new vscode.Range(startPos, endPos), inlined.trim());
+		});
+	});
+
 	// ─── check formatters (installed versions) ───────────────────────────────
 
 	const checkFormattersCommand = vscode.commands.registerCommand('ree.checkFormatters', async () => {
@@ -349,6 +393,7 @@ export function activate(context: vscode.ExtensionContext) {
 		formatter,
 		formatCommand,
 		formatWithReprintCommand,
+		expandReeTagCommand,
 		checkFormattersCommand,
 		tagProvider,
 		helperProvider,

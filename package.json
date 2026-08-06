@@ -60,8 +60,21 @@
 			{
 				"command": "ree.formatWithReprint",
 				"title": "ree: Format with reprint"
+			},
+			{
+				"command": "ree.expandReeTag",
+				"title": "ree: Expand ReeTag (inline component here)"
 			}
 		],
+		"menus": {
+			"editor/context": [
+				{
+					"command": "ree.expandReeTag",
+					"when": "editorLangId == ree",
+					"group": "1_modification"
+				}
+			]
+		},
 		"configuration": {
 			"title": "ree Templates",
 			"properties": {
