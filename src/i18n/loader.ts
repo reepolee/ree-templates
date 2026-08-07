@@ -154,17 +154,20 @@ function loadDbTranslations(reeFilePath: string): TranslationCache | null {
 
 /**
  * The route namespace for a .ree file: the directory relative to the nearest
- * `routes/` segment (e.g. ".../routes/examples/kitchen_sink/x.ree" ->
- * "examples/kitchen_sink"). Files not under `routes/` get "" (root only).
- * Mirrors `route_namespace_from_dir` in reepolee-dev/lib/route.ts.
+ * ancestor segment matching `routes*` (e.g. "routes", "routes_reeman") - so
+ * ".../routes/examples/kitchen_sink/x.ree" -> "examples/kitchen_sink" and
+ * ".../routes_reeman/db_routes/x.ree" -> "db_routes". Files with no such
+ * ancestor get "" (root only). Mirrors `route_namespace_from_dir` in
+ * reepolee-dev/lib/route.ts.
  */
 function routeNamespaceFromPath(reeFilePath: string): string {
 	const dir = path.dirname(reeFilePath).replace(/\\/g, '/');
-	const marker = '/routes/';
-	const idx = dir.lastIndexOf(marker);
+	const segments = dir.split('/');
+
+	const idx = segments.findIndex(seg => /^routes[^/]*$/.test(seg));
 	if (idx === -1) return '';
 
-	return dir.substring(idx + marker.length);
+	return segments.slice(idx + 1).join('/');
 }
 
 /**
