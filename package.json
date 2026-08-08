@@ -3,7 +3,7 @@
 	"project-type": "utility",
 	"displayName": "ree Templates",
 	"description": "Syntax highlighting and formatting for REE templates (via reettier)",
-	"version": "1.1.11",
+	"version": "1.1.12",
 	"publisher": "reepolee",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -99,7 +99,11 @@
 				},
 				"ree.server.args": {
 					"type": "array",
-					"default": ["run", "src/server.ts", "--stdio"],
+					"default": [
+						"run",
+						"src/server.ts",
+						"--stdio"
+					],
 					"description": "Arguments passed to the server command."
 				},
 				"ree.server.cwd": {
