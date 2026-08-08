@@ -1,0 +1,3 @@
+{#each props.items as item, index, key}
+  <item-card ...item>{= item.name}</item-card>
+{/each}

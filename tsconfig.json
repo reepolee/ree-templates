@@ -9,11 +9,16 @@
 		"sourceMap": true,
 		"rootDir": "src",
 		"strict": true,
+		"skipLibCheck": true,
 		"esModuleInterop": true,
 		"types": ["node"]
 	},
 	"exclude": [
 		"node_modules",
-		".vscode-test"
+		".vscode-test",
+		"lsp"
+	],
+	"include": [
+		"src/**/*.ts"
 	]
 }

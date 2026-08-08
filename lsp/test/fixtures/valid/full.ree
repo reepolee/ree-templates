@@ -1,0 +1,9 @@
+{#layout('layouts/base') }
+{#include('partials/nav') }
+<div>
+  {_ ui.hello }
+  {~ md(content) }
+  {@ descriptions.card }
+  {{ const count = items.length }}
+  <app-banner type="red">{= props.form_errors}</app-banner>
+</div>

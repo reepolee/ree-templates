@@ -1,0 +1,4 @@
+<div>
+  {= unfinished_expression
+  {_ partial.translation
+</div>

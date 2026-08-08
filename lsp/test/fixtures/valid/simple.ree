@@ -1,0 +1,5 @@
+<!-- Plain HTML with translation tag -->
+<div>
+  <h1>{_ ui.title }</h1>
+  <p>{= props.message }</p>
+</div>

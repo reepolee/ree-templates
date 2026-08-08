@@ -29,3 +29,15 @@ indentation.
 ## Settings
 
 - `ree.reettierPath` - path to the reettier executable (empty = use PATH).
+- `ree.server.command` - explicit language-server command.
+- `ree.server.args` - arguments for the explicit server command.
+- `ree.server.cwd` - working directory for the explicit server command.
+
+The extension bundles its internal language server inside the VSIX and launches
+it with Bun. Users do not need a sibling checkout, a global package, or a PATH
+entry. The server settings are overrides for development and troubleshooting.
+Translation hover reads every locale from the project's read-only translation
+export and refreshes when those locale files change.
+
+Project behavior is selected from the project's `package.json` `ree` metadata.
+This supports renamed and extended clones of both Reepolee and Ree Web templates.

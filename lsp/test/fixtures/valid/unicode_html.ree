@@ -1,0 +1,7 @@
+<div>
+  <h1>Hello, world!</h1>
+  <p>This is a test with Unicode: čšž ČŠŽ</p>
+  <!-- HTML comment -->
+  <br />
+  <img src="test.png" alt="Test">
+</div>

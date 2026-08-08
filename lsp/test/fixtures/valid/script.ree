@@ -1,0 +1,3 @@
+<script>
+  const x = { open: true };
+</script>

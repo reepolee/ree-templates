@@ -1,0 +1,5 @@
+{#if props.user}
+  <div>{= props.user.name}</div>
+{:else}
+  <p>{_ auth.login}</p>
+{/if}

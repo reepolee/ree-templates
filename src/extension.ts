@@ -3,63 +3,23 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// ─── i18n providers ─────────────────────────────────────────────────────────
+// ─── LSP client ────────────────────────────────────────────────────────────
 
-import { createTranslationHoverProvider } from './i18n/hover';
-import { createTranslationCompletionProvider } from './i18n/completion';
-import { createTranslationDefinitionProvider } from './i18n/definition';
-import {
-	createTranslationDiagnostics,
-	createTranslationCodeActionProvider,
-} from './i18n/diagnostics';
-import { createTranslationRenameProvider } from './i18n/rename';
+import { create_lsp_client, start_client, deactivate_client } from './lsp_client';
+
+// ─── i18n (VS Code-specific features only) ─────────────────────────────────
+// The LSP handles: hover, completion, definition, diagnostics, and code actions
+// for translations. Client-side keeps only VS Code-specific rendering:
+// inline decorations (→ value) and status bar (locale switcher).
+
 import { createInlineDecorations } from './i18n/inline';
 import { createLocaleStatusBarItem } from './i18n/statusBar';
 
-// ─── ReeTag expansion ───────────────────────────────────────────────────────
+// ─── ReeTag expansion (VS Code-specific, not duplicated by LSP) ────────────
 
 import { find_ree_tag_at } from './expand/tag_parser';
 import { resolve_component_path, read_component_source } from './expand/component_resolver';
 import { inline_component } from './expand/inline_component';
-
-// ─── IntelliSense Data ──────────────────────────────────────────────────────
-
-interface ReeCompletion {
-	label: string;
-	detail: string;
-	snippet: string;
-	docs: string;
-}
-
-const TAG_COMPLETIONS: ReeCompletion[] = [
-	{
-		label: '{#if}',
-		detail: 'Block: if condition',
-		snippet: '{#if $1}\n\t$0\n{/if}',
-		docs: 'Conditional block.',
-	},
-	{
-		label: '{:else}',
-		detail: 'Block: else branch',
-		snippet: '{:else}',
-		docs: 'Else branch.',
-	},
-	{
-		label: '{/if}',
-		detail: 'Close: if',
-		snippet: '{/if}',
-		docs: 'Closes if block.',
-	},
-];
-
-const HELPER_COMPLETIONS: ReeCompletion[] = [
-	{
-		label: 'url',
-		detail: '(path: string) => string',
-		snippet: "url('$1')",
-		docs: 'Build URL path.',
-	},
-];
 
 // ─── FIXED: project root resolver (important change) ───────────────────────
 
@@ -148,67 +108,23 @@ function run_formatter(cmd: string, cwd: string, input: string, extraArgs: strin
 	});
 }
 
-// ─── IntelliSense helper ────────────────────────────────────────────────────
-
-function buildItems(list: ReeCompletion[]) {
-	return list.map(c => {
-		const item = new vscode.CompletionItem(
-			c.label,
-			vscode.CompletionItemKind.Snippet
-		);
-
-		item.insertText = new vscode.SnippetString(c.snippet);
-		item.detail = c.detail;
-		item.documentation = new vscode.MarkdownString(c.docs);
-
-		return item;
-	});
-}
-
 // ─── activation ────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext) {
+	console.log('ree-templates: activate() started');
 
-	// ─── FORMATTER ──────────────────────────────────────────────────────────
+	// ─── LSP CLIENT ────────────────────────────────────────────────────────
 
-	const formatter = vscode.languages.registerDocumentFormattingEditProvider(
-		'ree',
-		{
-			async provideDocumentFormattingEdits(document) {
+	try {
+		const lsp_client = create_lsp_client(context);
+		start_client(lsp_client, context);
+		console.log('ree-templates: LSP client created and started');
+	} catch (err: any) {
+		console.error('ree-templates: LSP client creation failed:', err.message ?? err);
+		vscode.window.showErrorMessage(`ree LSP failed to start: ${err.message ?? err}`);
+	}
 
-				const config = vscode.workspace.getConfiguration('ree', document.uri);
-				const cmd = resolve_formatter_cmd(config);
-
-				const fileDir = path.dirname(document.fileName);
-
-				// ✅ ONLY REAL FIX: use project root resolver
-				const cwd = findProjectRoot(fileDir);
-
-				try {
-					const formatted = await run_formatter(
-						cmd,
-						cwd,
-						document.getText()
-					);
-
-					const fullRange = new vscode.Range(
-						document.positionAt(0),
-						document.positionAt(document.getText().length)
-					);
-
-					return [vscode.TextEdit.replace(fullRange, formatted)];
-
-				} catch (err: any) {
-					vscode.window.showErrorMessage(
-						`${cmd} failed: ${err.message ?? err}`
-					);
-					return [];
-				}
-			},
-		}
-	);
-
-	// ─── command ────────────────────────────────────────────────────────────
+	// ─── commands ────────────────────────────────────────────────────────────
 
 	const formatCommand = vscode.commands.registerCommand('ree.format', () => {
 		const editor = vscode.window.activeTextEditor;
@@ -299,90 +215,17 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage(summary, { modal: false });
 	});
 
-	// ─── completion providers (tags + helpers) ──────────────────────────────
+	// ─── VS Code-specific i18n features (cannot be LSP) ─────────────────────
+	// These use VS Code's TextEditorDecorationType API and status bar API,
+	// which have no equivalent in the LSP protocol.
 
-	const tagProvider = vscode.languages.registerCompletionItemProvider(
-		{ language: 'ree' },
-		{
-			provideCompletionItems(document, position) {
-				const line = document.lineAt(position).text.slice(0, position.character);
-				if (!line.endsWith('{')) return;
-				return buildItems(TAG_COMPLETIONS);
-			},
-		},
-		'{'
-	);
-
-	const helperProvider = vscode.languages.registerCompletionItemProvider(
-		{ language: 'ree' },
-		{
-			provideCompletionItems() {
-				return buildItems(HELPER_COMPLETIONS);
-			},
-		}
-	);
-
-	// ─── i18n providers ─────────────────────────────────────────────────────
-
-	// 1. Hover — show values from all locales
-	const translationHoverProvider = vscode.languages.registerHoverProvider(
-		{ language: 'ree' },
-		createTranslationHoverProvider()
-	);
-
-	// 2. Completion — suggest translation keys inside translation tags
-	const translationCompletionProvider = vscode.languages.registerCompletionItemProvider(
-		{ language: 'ree' },
-		createTranslationCompletionProvider(),
-		'_',
-		'-',
-		'@',
-		'.',
-		' '
-	);
-
-	// 3. Go To Definition — Ctrl+Click opens locale JSON at the key
-	const translationDefinitionProvider = vscode.languages.registerDefinitionProvider(
-		{ language: 'ree' },
-		createTranslationDefinitionProvider()
-	);
-
-	// 4. Diagnostics — underline unknown translation keys
-	const { collection: translationDiagnostics, watcher: translationWatcher, updateDocument } =
-		createTranslationDiagnostics();
-
-	// Update diagnostics on document open/change
-	const diagnosticSub = vscode.workspace.onDidOpenTextDocument(updateDocument);
-	const changeSub = vscode.workspace.onDidChangeTextDocument(e => updateDocument(e.document));
-	const closeSub = vscode.workspace.onDidCloseTextDocument(doc => {
-		translationDiagnostics.delete(doc.uri);
-	});
-
-	// Run diagnostics on initially visible documents
-	for (const editor of vscode.window.visibleTextEditors) {
-		updateDocument(editor.document);
-	}
-
-	// 5. Code Actions — Quick Fix to create missing keys
-	const codeActionProvider = vscode.languages.registerCodeActionsProvider(
-		{ language: 'ree' },
-		createTranslationCodeActionProvider(),
-		{ providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
-	);
-
-	// 6. Rename — F2 renames keys across .ree + .json files
-	const renameProvider = vscode.languages.registerRenameProvider(
-		{ language: 'ree' },
-		createTranslationRenameProvider()
-	);
-
-	// 7. Inline decorations — show → translated value after {_ / {- tags
+	// 1. Inline decorations — show → translated value after {_ / {- tags
 	const inlineDecorations = createInlineDecorations();
 
-	// 8. Status bar — language switcher
+	// 2. Status bar — language switcher
 	const localeStatusBar = createLocaleStatusBarItem();
 
-	// 9. Inline refresh command (called when locale changes via status bar)
+	// 3. Inline refresh command (called when locale changes via status bar)
 	const refreshInlineCmd = vscode.commands.registerCommand('ree._refreshInline', () => {
 		inlineDecorations.refresh();
 	});
@@ -390,29 +233,18 @@ export function activate(context: vscode.ExtensionContext) {
 	// ─── push all subscriptions ─────────────────────────────────────────────
 
 	context.subscriptions.push(
-		formatter,
 		formatCommand,
 		formatWithReprintCommand,
 		expandReeTagCommand,
 		checkFormattersCommand,
-		tagProvider,
-		helperProvider,
 
-		// i18n
-		translationHoverProvider,
-		translationCompletionProvider,
-		translationDefinitionProvider,
-		translationDiagnostics,
-		translationWatcher,
-		diagnosticSub,
-		changeSub,
-		closeSub,
-		codeActionProvider,
-		renameProvider,
+		// i18n (VS Code-specific only)
 		inlineDecorations,
 		localeStatusBar,
 		refreshInlineCmd,
 	);
 }
 
-export function deactivate() { }
+export function deactivate() {
+	return deactivate_client();
+}
