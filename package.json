@@ -23,9 +23,6 @@
 		"Formatters",
 		"Themes"
 	],
-	"activationEvents": [
-		"onLanguage:ree"
-	],
 	"main": "./dist/extension.js",
 	"workspaces": [
 		"lsp"
