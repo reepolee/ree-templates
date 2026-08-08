@@ -163,7 +163,7 @@ export function start_client(client: LanguageClient, context: vscode.ExtensionCo
 	const start_promise = client.start();
 	start_promise.then(() => {
 		log("LSP server started successfully");
-	}, (err) => {
+	}, (err: unknown) => {
 		log(`Failed to start: ${err}`);
 		console.error(`ree-lsp: Failed to start language server: ${err}`);
 		vscode.window.showErrorMessage(
