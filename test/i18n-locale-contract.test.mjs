@@ -25,7 +25,7 @@ test('reads the supported_locales BCP 47 configuration contract', () => {
 });
 
 test('recognizes BCP 47 locale JSON filenames', () => {
-	assert.match(locale_file_source, /\^\[a-z\]\{2\}-\[A-Z\]\{2\}\\\.json\$/);
+	assert.match(locale_file_source, /\^\[a-z\]\{2,3\}\(\?:-\[a-z0-9\]\{2,8\}\)\+\\\.json\$/);
 	assert.match(locale_file_source, /en-US\.json/);
 	assert.match(locale_file_source, /sl-SI\.json/);
 });
