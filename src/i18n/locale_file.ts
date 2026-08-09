@@ -1,5 +1,5 @@
 /**
- * BCP 47 locale JSON filename used by Reepolee and Ree Web.
+ * BCP 47 locale JSON filename used by Reepolee and Reeweb.
  * Examples: "en-US.json", "sl-SI.json".
  */
 export const LOCALE_FILE_RE = /^[a-z]{2}-[A-Z]{2}\.json$/;

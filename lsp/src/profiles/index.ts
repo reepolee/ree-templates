@@ -18,7 +18,7 @@ import { read_project_config, type ReeProjectConfig } from "./project_config";
 // Profile type
 // ---------------------------------------------------------------------------
 
-export type ProfileName = "reepolee" | "ree-web" | "unknown";
+export type ProfileName = "reepolee" | "reeweb" | "unknown";
 
 export interface ResolvedTarget {
 	/** Absolute filesystem path */
@@ -102,8 +102,8 @@ export async function detect_profile(start_dir: string): Promise<ReeProjectProfi
 			&& existsSync(join(dir, "lib", "template_engine.ts"))
 			&& existsSync(join(dir, "lib", "i18n.ts"))
 		) {
-			const { create_ree_web_profile } = await import("./ree_web");
-			return create_ree_web_profile(dir, legacy_ree_web_config());
+			const { create_reeweb_profile } = await import("./reeweb");
+			return create_reeweb_profile(dir, legacy_reeweb_config());
 		}
 
 		// Walk up
@@ -121,9 +121,9 @@ async function create_profile_from_config(project_root: string, config: ReeProje
 		return create_reepolee_profile(project_root, config);
 	}
 
-	if (config.project_family === "ree-web") {
-		const { create_ree_web_profile } = await import("./ree_web");
-		return create_ree_web_profile(project_root, config);
+	if (config.project_family === "reeweb") {
+		const { create_reeweb_profile } = await import("./reeweb");
+		return create_reeweb_profile(project_root, config);
 	}
 
 	return null;
@@ -139,9 +139,9 @@ function legacy_reepolee_config(): ReeProjectConfig {
 	};
 }
 
-function legacy_ree_web_config(): ReeProjectConfig {
+function legacy_reeweb_config(): ReeProjectConfig {
 	return {
-		project_family: "ree-web",
+		project_family: "reeweb",
 		template_roots: ["src/public"],
 		component_roots: ["src/components"],
 		translation_provider: "route-json",

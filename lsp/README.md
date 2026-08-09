@@ -17,7 +17,7 @@ adapter through the `ree` object in its `package.json`:
 ```json
 {
 	"ree": {
-		"project_family": "ree-web",
+		"project_family": "reeweb",
 		"template_roots": ["src/public"],
 		"component_roots": ["src/components"],
 		"translation_provider": "route-json",
@@ -27,7 +27,7 @@ adapter through the `ree` object in its `package.json`:
 ```
 
 Supported project families are `reepolee` with the `db-export` translation
-provider and `ree-web` with the `route-json` provider. The adapter is selected
+provider and `reeweb` with the `route-json` provider. The adapter is selected
 per document, so multi-root editor workspaces can contain both project types.
 Legacy structure detection remains available for projects without metadata.
 

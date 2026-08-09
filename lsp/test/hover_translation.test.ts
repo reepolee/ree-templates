@@ -39,10 +39,10 @@ describe("Translation hover", () => {
 		expect(kitchen_value).not.toContain("Home Page");
 	});
 
-	test("merges Ree Web root and route-local translations", async () => {
-		const project_root = join(import.meta.dir, "..", "..", "..", "ree-web");
+	test("merges Reeweb root and route-local translations", async () => {
+		const project_root = join(import.meta.dir, "..", "..", "..", "reeweb");
 		const profile = await detect_profile(project_root);
-		expect(profile?.name).toBe("ree-web");
+		expect(profile?.name).toBe("reeweb");
 
 		const source = "{_ ui.title }";
 		const position = { line: 0, character: 5 };

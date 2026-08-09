@@ -14,11 +14,11 @@ afterEach(() => {
 });
 
 describe("package.json Ree project metadata", () => {
-	test("selects the Ree Web adapter for a renamed clone", async () => {
-		const project_root = create_project("ree-web");
+	test("selects the Reeweb adapter for a renamed clone", async () => {
+		const project_root = create_project("reeweb");
 		const profile = await detect_profile(project_root);
 
-		expect(profile?.name).toBe("ree-web");
+		expect(profile?.name).toBe("reeweb");
 		expect(profile?.route_roots).toEqual([join(project_root, "src", "public")]);
 	});
 
@@ -31,7 +31,7 @@ describe("package.json Ree project metadata", () => {
 	});
 });
 
-function create_project(project_family: "reepolee" | "ree-web"): string {
+function create_project(project_family: "reepolee" | "reeweb"): string {
 	const project_root = mkdtempSync(join(tmpdir(), "renamed-ree-project-"));
 	temp_dirs.push(project_root);
 

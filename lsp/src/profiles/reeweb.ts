@@ -1,5 +1,5 @@
 /**
- * ree-web SSG project profile.
+ * reeweb SSG project profile.
  *
  * Conventions:
  * - Page templates live in `src/public/` (file-based SSG routing)
@@ -9,7 +9,7 @@
  * - Root locale files provide global strings and route-local files override them
  * - Helper names & include resolver imported at runtime from the project
  *
- * Note: `$routes/` in ree-web maps to `src/public/`, not `routes/`.
+ * Note: `$routes/` in reeweb maps to `src/public/`, not `routes/`.
  * The real resolver doesn't handle this difference, so we pre-process
  * the path value before delegating.
  */
@@ -27,7 +27,7 @@ import type { ReeProjectConfig } from "./project_config";
 // Factory
 // ---------------------------------------------------------------------------
 
-export async function create_ree_web_profile(project_root: string, config: ReeProjectConfig): Promise<ReeProjectProfile> {
+export async function create_reeweb_profile(project_root: string, config: ReeProjectConfig): Promise<ReeProjectProfile> {
 	const route_roots = config.template_roots.map((template_root) => join(project_root, template_root));
 	const component_roots = config.component_roots.map((component_root) => join(project_root, component_root));
 	const views_dir = route_roots[0]!;
@@ -36,8 +36,8 @@ export async function create_ree_web_profile(project_root: string, config: ReePr
 
 	return {
 		project_root,
-		name: "ree-web",
-		label: "ree-web (SSG)",
+		name: "reeweb",
+		label: "reeweb (SSG)",
 		route_roots,
 		component_roots,
 		translation_roots: [translation_root],
@@ -45,7 +45,7 @@ export async function create_ree_web_profile(project_root: string, config: ReePr
 
 		resolve_include(path_value: string, from_file: string): ResolvedTarget | undefined {
 			// Pre-process: $routes/ → non-alias path (views-relative page)
-			// The real resolver maps $routes/x → routes/x, but ree-web pages
+			// The real resolver maps $routes/x → routes/x, but reeweb pages
 			// are in src/public/. We strip the alias prefix so it resolves
 			// relative to views_dir (src/public/).
 			let fixed = path_value;

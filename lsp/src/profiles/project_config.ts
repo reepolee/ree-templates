@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 
-export type ProjectFamily = "reepolee" | "ree-web";
+export type ProjectFamily = "reepolee" | "reeweb";
 export type TranslationProviderName = "db-export" | "route-json";
 
 export interface ReeProjectConfig {
@@ -42,7 +42,7 @@ export function read_project_config(project_root: string): ReeProjectConfig | nu
 }
 
 function validate_project_config(config: PackageReeConfig, project_root: string): ReeProjectConfig | null {
-	if (config.project_family !== "reepolee" && config.project_family !== "ree-web") return null;
+	if (config.project_family !== "reepolee" && config.project_family !== "reeweb") return null;
 	if (config.translation_provider !== "db-export" && config.translation_provider !== "route-json") return null;
 
 	const template_roots = validate_relative_paths(config.template_roots, project_root);

@@ -11,7 +11,7 @@ import { is_locale_file } from './locale_file';
  * keyed by locale.
  *
  * Two sources are supported, tried in order:
- *  1. ree-web style: BCP 47 locale JSON files (`en-US.json`, `sl-SI.json`) co-located in the
+ *  1. reeweb style: BCP 47 locale JSON files (`en-US.json`, `sl-SI.json`) co-located in the
  *     same directory as the .ree file.
  *  2. reepolee-dev style ("DB mode"): a `.reepolee/i18n/<lang>.json` working
  *     folder emitted by the dev server from the DB `translations` table. Keys
@@ -27,7 +27,7 @@ export function loadTranslations(reeFilePath: string): TranslationCache | null {
 }
 
 /**
- * ree-web style: read locale JSON files co-located with the .ree file.
+ * reeweb style: read locale JSON files co-located with the .ree file.
  */
 function loadSiblingTranslations(reeFilePath: string): TranslationCache | null {
 	const dir = path.dirname(reeFilePath);

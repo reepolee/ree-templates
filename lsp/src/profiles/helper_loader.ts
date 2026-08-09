@@ -73,18 +73,5 @@ export async function load_helper_names(project_root: string): Promise<readonly 
 		}
 	}
 
-	// Ree-web: same file exists at lib/template/helper_names.ts
-	const reeweb_helper_path = join(project_root, "lib", "template", "helper_names.ts");
-	if (existsSync(reeweb_helper_path) && reeweb_helper_path !== helper_path) {
-		try {
-			const mod = await import(reeweb_helper_path);
-			if (Array.isArray(mod.DEFAULT_HELPER_NAMES)) {
-				return mod.DEFAULT_HELPER_NAMES as readonly string[];
-			}
-		} catch {
-			// Import failed - use fallback
-		}
-	}
-
 	return DEFAULT_HELPER_NAMES;
 }
