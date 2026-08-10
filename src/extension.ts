@@ -164,6 +164,48 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	const formatWithMarkupCommand = vscode.commands.registerCommand('ree.formatWithMarkup', async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || editor.document.languageId !== 'ree') {
+			return;
+		}
+
+		const width_text = await vscode.window.showInputBox({
+			prompt: 'Markup wrap width',
+			value: '100',
+			validateInput: value => /^\d+$/.test(value) && Number(value) > 0 ? undefined : 'Enter a positive number',
+		});
+		if (width_text === undefined) {
+			return;
+		}
+
+		const document = editor.document;
+		const config = vscode.workspace.getConfiguration('ree', document.uri);
+		const cmd = resolve_formatter_cmd(config);
+		const cwd = findProjectRoot(path.dirname(document.fileName));
+
+		try {
+			const formatted = await run_formatter(cmd, cwd, document.getText(), [
+				'--wrap-markup',
+				'--wrap-width',
+				width_text,
+			]);
+
+			const fullRange = new vscode.Range(
+				document.positionAt(0),
+				document.positionAt(document.getText().length)
+			);
+
+			await editor.edit(editBuilder => {
+				editBuilder.replace(fullRange, formatted);
+			});
+		} catch (err: any) {
+			vscode.window.showErrorMessage(
+				`${cmd} --wrap-markup --wrap-width ${width_text} failed: ${err.message ?? err}`
+			);
+		}
+	});
+
 	// ─── expand ReeTag (replace call site with the component's own body) ───
 
 	const expandReeTagCommand = vscode.commands.registerCommand('ree.expandReeTag', async () => {
@@ -235,6 +277,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		formatCommand,
 		formatWithReprintCommand,
+		formatWithMarkupCommand,
 		expandReeTagCommand,
 		checkFormattersCommand,
 

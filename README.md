@@ -15,6 +15,9 @@ indentation.
 - **ree: Format with reprint** (`ree.formatWithReprint`) - runs
   `reettier --full`, doing a full AST re-derivation of all line breaks instead
   of preserving the ones you wrote.
+- **ree: Format with markup wrapping** (`ree.formatWithMarkup`) - prompts for
+  a width and runs `reettier --wrap-markup --wrap-width <width>` for semantic
+  `.ree` markup wrapping.
 - **ree: Check Formatters (path and version)** (`ree.checkFormatters`) - reports
   the installed version of `reettier`, looked up by its own name on PATH (so a
   path shim does not mask the real version). A missing CLI shows as

@@ -62,6 +62,10 @@
 				"title": "ree: Format with reprint"
 			},
 			{
+				"command": "ree.formatWithMarkup",
+				"title": "ree: Format with markup wrapping"
+			},
+			{
 				"command": "ree.expandReeTag",
 				"title": "ree: Expand ReeTag (inline component here)"
 			}
