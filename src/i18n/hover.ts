@@ -64,7 +64,7 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 				const default_value = default_data?.[key];
 
 				let hasAny = default_value !== undefined;
-				let table = '| Locale | Translation |\n| --- | --- |\n';
+				let table = '| Locale&nbsp;&nbsp;&nbsp;&nbsp; | Translation |\n| --- | --- |\n';
 
 				if (default_value !== undefined) {
 					table += `| ⭐ ${default_locale.toUpperCase()} | **${escapeTableCell(default_value)}** |\n`;

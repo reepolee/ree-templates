@@ -117,7 +117,7 @@ function hover_for_token(token: import("../parser/ast").Token, profile?: ReeProj
 				if (profile) {
 					const values = lookup_all_locale_values(token.translation_key, profile, document_uri);
 					if (values.length > 0) {
-						doc += "| Locale | Translation |\n| --- | --- |\n";
+						doc += "| Locale&nbsp;&nbsp;&nbsp;&nbsp; | Translation |\n| --- | --- |\n";
 						for (const { locale, value } of values) {
 							const cell = value.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
 							doc += `| ${locale.toUpperCase()} | **${cell}** |\n`;
