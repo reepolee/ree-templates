@@ -120,7 +120,7 @@ function hover_for_token(token: import("../parser/ast").Token, profile?: ReeProj
 						doc += "| Locale | Translation |\n| --- | --- |\n";
 						for (const { locale, value } of values) {
 							const cell = value.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
-							doc += `| ${locale.toUpperCase()} | ${cell} |\n`;
+							doc += `| ${locale.toUpperCase()} | **${cell}** |\n`;
 						}
 					} else {
 						doc += "_(key not found in export - may still exist in DB)_";

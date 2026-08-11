@@ -67,7 +67,7 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 				let table = '| Locale | Translation |\n| --- | --- |\n';
 
 				if (default_value !== undefined) {
-					table += `| ⭐ ${default_locale.toUpperCase()} | ${escapeTableCell(default_value)} |\n`;
+					table += `| ⭐ ${default_locale.toUpperCase()} | **${escapeTableCell(default_value)}** |\n`;
 				}
 
 				// Then show all other locales
@@ -76,7 +76,7 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 					const value = data[key];
 					if (value !== undefined) {
 						hasAny = true;
-						table += `| ${locale.toUpperCase()} | ${escapeTableCell(value)} |\n`;
+						table += `| ${locale.toUpperCase()} | **${escapeTableCell(value)}** |\n`;
 					}
 				}
 
