@@ -10,6 +10,13 @@ import { get_default_locale } from './settings';
 const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
 
 /**
+ * Escape characters that would break a markdown table cell.
+ */
+function escapeTableCell(value: string): string {
+	return value.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+}
+
+/**
  * Hover provider for translation tags in .ree templates.
  *
  * Hovering over a translation key shows the value in all available locales:
@@ -53,28 +60,29 @@ export function createTranslationHoverProvider(): vscode.HoverProvider {
 
 				md.appendMarkdown(`**Translation key:** \`${key}\`\n\n`);
 
-				// Show the selected/default locale first with emphasis
 				const default_data = translations[default_locale];
 				const default_value = default_data?.[key];
 
+				let hasAny = default_value !== undefined;
+				let table = '| Locale | Translation |\n| --- | --- |\n';
+
 				if (default_value !== undefined) {
-					md.appendCodeblock(default_value, 'text');
-					md.appendMarkdown(`⭐ **${default_locale.toUpperCase()}** *(default)*\n\n`);
+					table += `| ⭐ ${default_locale.toUpperCase()} | ${escapeTableCell(default_value)} |\n`;
 				}
 
 				// Then show all other locales
-				let hasOthers = false;
 				for (const [locale, data] of Object.entries(translations)) {
 					if (locale === default_locale) continue;
 					const value = data[key];
 					if (value !== undefined) {
-						hasOthers = true;
-						md.appendCodeblock(value, 'text');
-						md.appendMarkdown(`- *${locale.toUpperCase()}*\n\n`);
+						hasAny = true;
+						table += `| ${locale.toUpperCase()} | ${escapeTableCell(value)} |\n`;
 					}
 				}
 
-				if (default_value === undefined && !hasOthers) {
+				if (hasAny) {
+					md.appendMarkdown(table);
+				} else {
 					md.appendMarkdown('_(key not found in any locale)_');
 				}
 

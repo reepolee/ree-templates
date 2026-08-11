@@ -117,8 +117,10 @@ function hover_for_token(token: import("../parser/ast").Token, profile?: ReeProj
 				if (profile) {
 					const values = lookup_all_locale_values(token.translation_key, profile, document_uri);
 					if (values.length > 0) {
+						doc += "| Locale | Translation |\n| --- | --- |\n";
 						for (const { locale, value } of values) {
-							doc += `\`${value}\`\n- *${locale.toUpperCase()}*\n\n`;
+							const cell = value.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
+							doc += `| ${locale.toUpperCase()} | ${cell} |\n`;
 						}
 					} else {
 						doc += "_(key not found in export - may still exist in DB)_";
