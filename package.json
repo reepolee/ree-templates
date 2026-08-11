@@ -139,7 +139,8 @@
 		"watch": "node esbuild.js --watch & tsc --noEmit --watch --project tsconfig.json",
 		"vscode:prepublish": "npm run package",
 		"package": "npm run check-types && npm run lsp:typecheck && node esbuild.js --production",
-		"bundle": "git push && pnpm version patch && git push &&  npm run package && vsce package --no-update-package-json"
+		"bundle": "git push && pnpm version patch && git push &&  npm run package && vsce package --no-update-package-json",
+		"publish": "vsce publish"
 	},
 	"devDependencies": {
 		"@types/node": "25.9.3",
