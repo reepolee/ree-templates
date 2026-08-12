@@ -77,7 +77,13 @@ function get_server_config(context: vscode.ExtensionContext): ServerConfig {
 		|| has_configured_value(args_setting)
 		|| has_configured_value(cwd_setting);
 
-	if (!has_explicit_config) {
+	const raw_command = config.get<string>("server.command", "bun");
+	const configured_command = typeof raw_command === "string" ? raw_command.trim() : "";
+
+	// A blank or non-string `ree.server.command` means "use the bundled server",
+	// even when other server settings are present - VS Code's LanguageClient
+	// rejects an empty command with "Unsupported server configuration".
+	if (!has_explicit_config || !configured_command) {
 		const bundled_server = path.join(context.extensionPath, "dist", "ree-lsp.cjs");
 
 		return {
@@ -89,9 +95,12 @@ function get_server_config(context: vscode.ExtensionContext): ServerConfig {
 
 	const cwd = config.get<string>("server.cwd", "");
 
+	const raw_args = config.get<string[]>("server.args", ["run", "src/server.ts", "--stdio"]);
+	const configured_args = Array.isArray(raw_args) ? raw_args.map(String) : [];
+
 	return {
-		command: config.get<string>("server.command", "bun"),
-		args: config.get<string[]>("server.args", ["run", "src/server.ts", "--stdio"]),
+		command: configured_command,
+		args: configured_args,
 		cwd: cwd || undefined,
 	};
 }
