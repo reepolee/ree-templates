@@ -4,18 +4,22 @@
  * Conventions:
  * - Routes live in `routes/` (standard module-based routing)
  * - Components live in `components/` (hyphenated .ree files)
- * - Translations are DB-first; `.reepolee/i18n/` is a read-only editor export
+ * - Translations are co-located JSON: a project-level root plus per-route
+ *   overrides, each either a bare directory or a `locales/` subfolder
  * - Helper names & include resolver imported at runtime from the project
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, dirname, basename } from "node:path";
 
 import type { ReeProjectProfile, ResolvedTarget } from "./index";
-import { resolve_template_file, within_base, flatten_json } from "./index";
+import { is_locale_file, resolve_template_file, within_base, flatten_json } from "./index";
 import { DEFAULT_HELPER_NAMES } from "./helper_loader";
 import { local_resolve } from "./include_loader";
 import type { ReeProjectConfig } from "./project_config";
+
+/** Conventional subfolder holding locale JSON files. */
+const LOCALES_DIR = "locales";
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -24,7 +28,7 @@ import type { ReeProjectConfig } from "./project_config";
 export async function create_reepolee_profile(project_root: string, config: ReeProjectConfig): Promise<ReeProjectProfile> {
 	const route_roots = config.template_roots.map((template_root) => join(project_root, template_root));
 	const component_roots = config.component_roots.map((component_root) => join(project_root, component_root));
-	const translation_root = join(project_root, config.translation_root);
+	const translation_roots = config.translation_roots.map((root) => join(project_root, root));
 	const views_dir = route_roots[0]!;
 	const components_dir = component_roots[0]!;
 
@@ -34,7 +38,7 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 		label: "Reepolee",
 		route_roots,
 		component_roots,
-		translation_roots: [translation_root],
+		translation_roots,
 		helper_names: DEFAULT_HELPER_NAMES,
 
 		resolve_include(path_value: string, from_file: string): ResolvedTarget | undefined {
@@ -50,89 +54,128 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 		},
 
 		load_translation_index(locale_file: string, from_ree_file?: string): Map<string, string> | null {
-			return load_ree_i18n_export(locale_file, from_ree_file);
+			return load_co_located_translations(locale_file, project_root, from_ree_file);
+		},
+
+		translation_definition_files(from_ree_file: string): string[] {
+			return definition_files(project_root, from_ree_file);
 		},
 	};
 }
 
 // ---------------------------------------------------------------------------
-// Translation index loading (read-only DB export)
+// Co-located locale directories
 // ---------------------------------------------------------------------------
 
 /**
- * Load a DB-exported locale JSON file and flatten it into a key→value map.
- *
- * When `from_ree_file` is provided, resolves keys against the template's
- * route namespace - merging `routes.*` (root) with the subtree at
- * `routes.<namespace>.*`, matching the server's `resolve_translations`.
- * This means `{_ labels.row_count }` in a template under `routes_reeman/db_tables/`
- * resolves to `routes.routes_reeman.db_tables.labels.row_count` in the export.
+ * Locale files sit either directly in a directory or in its `locales/`
+ * subfolder. Returns whichever exists, preferring the subfolder.
  */
-function load_ree_i18n_export(locale_file: string, from_ree_file?: string): Map<string, string> | null {
-	try {
-		if (!existsSync(locale_file)) return null;
-		const content = readFileSync(locale_file, "utf-8");
-		const data = JSON.parse(content) as Record<string, unknown>;
-
-		if (from_ree_file) {
-			return load_namespaced(data, from_ree_file);
-		}
-
-		// No file context - flatten entire export
-		const map = new Map<string, string>();
-		flatten_json(data, "", map);
-		return map;
-	} catch {
-		return null;
-	}
+function locale_dir_for(dir: string): string | undefined {
+	const nested = join(dir, LOCALES_DIR);
+	if (existsSync(nested)) return nested;
+	if (existsSync(dir)) return dir;
+	return undefined;
 }
 
 /**
- * Merge `routes.*` root keys with the subtree at the template's route
- * namespace, then flatten. Mirrors `resolve_translations` in
- * reepolee-dev/lib/request_context.ts.
+ * Ordered locale directories for a template, least to most specific:
+ * the project root, then each ancestor directory down to the template's own.
+ *
+ * A template in `routes_reeman/project/` therefore inherits from
+ * `locales/`, then `routes_reeman/locales/`, then `routes_reeman/project/locales/`.
  */
-function load_namespaced(tree: Record<string, unknown>, ree_file_path: string): Map<string, string> {
-	const ns = route_namespace(ree_file_path);
+function locale_dirs_for(project_root: string, from_ree_file?: string): string[] {
+	const dirs: string[] = [];
 
-	// Root keys: everything under `routes` in the export (nav, labels, actions, etc.)
-	const root_routes = is_obj(tree.routes) ? tree.routes : {};
+	const root_dir = locale_dir_for(join(project_root, LOCALES_DIR));
+	if (root_dir) dirs.push(root_dir);
 
-	// Subtree at the file's route namespace: top-level key in the export
-	// (e.g. `db_tables` for routes_reeman/db_tables/detail.ree)
-	// Use the full tree, not just tree.routes
-	const subtree = get_nested(tree, ns.replace(/\//g, "."));
+	if (from_ree_file) {
+		const chain: string[] = [];
+		let dir = dirname(from_ree_file);
 
-	// Merge: root provides shared keys, subtree overrides with route-specific ones
-	const merged = deep_merge(root_routes as Record<string, unknown>, subtree);
+		while (within_base(dir, project_root) && dir !== project_root) {
+			chain.unshift(dir);
+			const parent = dirname(dir);
+			if (parent === dir) break;
+			dir = parent;
+		}
+
+		for (const ancestor of chain) {
+			const locale_dir = locale_dir_for(ancestor);
+			if (locale_dir && !dirs.includes(locale_dir)) dirs.push(locale_dir);
+		}
+	}
+
+	return dirs;
+}
+
+function locale_files_in(dir: string): string[] {
+	try {
+		const files = readdirSync(dir).filter(is_locale_file);
+		files.sort();
+		return files.map((file_name) => join(dir, file_name));
+	} catch {
+		return [];
+	}
+}
+
+/** Route-local files are listed first so go-to-definition lands on overrides. */
+function definition_files(project_root: string, from_ree_file: string): string[] {
+	const dirs = locale_dirs_for(project_root, from_ree_file);
+	const reversed = [...dirs].reverse();
+	const out: string[] = [];
+	for (const dir of reversed) {
+		out.push(...locale_files_in(dir));
+	}
+	return out;
+}
+
+// ---------------------------------------------------------------------------
+// Translation index loading (co-located JSON)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load translations for a template as a flat key -> value map.
+ *
+ * The project root supplies shared strings and the template's own directory
+ * deep-merges over them, so `{_ ui.title }` picks up a route-local override
+ * while still resolving keys that only exist at the root.
+ */
+function load_co_located_translations(locale_file: string, project_root: string, from_ree_file?: string): Map<string, string> | null {
+	const locale_name = basename(locale_file);
+	const dirs = locale_dirs_for(project_root, from_ree_file);
+
+	let merged: Record<string, unknown> | null = null;
+
+	for (const dir of dirs) {
+		const candidate = join(dir, locale_name);
+		if (!existsSync(candidate)) continue;
+		const data = read_json_object(candidate);
+		if (!data) continue;
+		merged = merged ? deep_merge(merged, data) : data;
+	}
+
+	if (!merged) return null;
 
 	const map = new Map<string, string>();
 	flatten_json(merged, "", map);
 	return map;
 }
 
-/** Extract the route namespace from a .ree file path. */
-function route_namespace(ree_file_path: string): string {
-	const dir = dirname(ree_file_path).replace(/\\/g, "/");
-	const segs = dir.split("/");
-	const idx = segs.findIndex(s => /^routes[^/]*$/.test(s));
-	if (idx === -1) return "";
-	return segs.slice(idx + 1).join("/");
+function read_json_object(file_path: string): Record<string, unknown> | null {
+	try {
+		const content = readFileSync(file_path, "utf-8");
+		const parsed = JSON.parse(content) as unknown;
+		return is_obj(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
 }
 
 function is_obj(v: unknown): v is Record<string, unknown> {
 	return v !== null && typeof v === "object" && !Array.isArray(v);
-}
-
-function get_nested(obj: Record<string, unknown>, path: string): Record<string, unknown> {
-	if (!path) return obj as Record<string, unknown>;
-	const parts = path.split(".").filter(Boolean);
-	let cur: unknown = obj;
-	for (const p of parts) {
-		if (!is_obj(cur)) return {};
-		cur = cur[p];
-	}
-	return is_obj(cur) ? cur : {};
 }
 
 function deep_merge(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {

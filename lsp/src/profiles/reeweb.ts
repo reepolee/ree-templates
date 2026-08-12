@@ -32,7 +32,7 @@ export async function create_reeweb_profile(project_root: string, config: ReePro
 	const component_roots = config.component_roots.map((component_root) => join(project_root, component_root));
 	const views_dir = route_roots[0]!;
 	const component_root = component_roots[0]!;
-	const translation_root = join(project_root, config.translation_root);
+	const translation_root = join(project_root, config.translation_roots[0]!);
 
 	return {
 		project_root,

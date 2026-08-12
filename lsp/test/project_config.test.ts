@@ -27,7 +27,7 @@ describe("package.json Ree project metadata", () => {
 		const profile = await detect_profile(project_root);
 
 		expect(profile?.name).toBe("reepolee");
-		expect(profile?.translation_roots).toEqual([join(project_root, ".reepolee", "i18n")]);
+		expect(profile?.translation_roots).toEqual([join(project_root, "routes"), join(project_root, "routes_reeman")]);
 	});
 });
 
@@ -40,15 +40,15 @@ function create_project(project_family: "reepolee" | "reeweb"): string {
 			project_family,
 			template_roots: ["routes"],
 			component_roots: ["components"],
-			translation_provider: "db-export",
-			translation_root: ".reepolee/i18n",
+			translation_provider: "route-json",
+			translation_roots: ["routes", "routes_reeman"],
 		}
 		: {
 			project_family,
 			template_roots: ["src/public"],
 			component_roots: ["src/components"],
 			translation_provider: "route-json",
-			translation_root: "src/public",
+			translation_roots: ["src/public"],
 		};
 
 	const package_data = { name: "customer-site", ree: config };

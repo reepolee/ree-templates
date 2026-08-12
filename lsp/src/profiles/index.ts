@@ -134,8 +134,8 @@ function legacy_reepolee_config(): ReeProjectConfig {
 		project_family: "reepolee",
 		template_roots: ["routes"],
 		component_roots: ["components"],
-		translation_provider: "db-export",
-		translation_root: ".reepolee/i18n",
+		translation_provider: "route-json",
+		translation_roots: ["routes"],
 	};
 }
 
@@ -145,7 +145,7 @@ function legacy_reeweb_config(): ReeProjectConfig {
 		template_roots: ["src/public"],
 		component_roots: ["src/components"],
 		translation_provider: "route-json",
-		translation_root: "src/public",
+		translation_roots: ["src/public"],
 	};
 }
 

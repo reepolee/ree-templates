@@ -61,8 +61,25 @@ const profile_cache = new Map<string, ReeProjectProfile | null>();
 // Initialize handler
 // ---------------------------------------------------------------------------
 
-connection.onInitialize(async (_params: InitializeParams): Promise<InitializeResult> => {
+/**
+ * Locale used to pick which file go-to-definition opens when a key exists in
+ * several locales. Supplied by the client and refreshed on settings changes.
+ */
+let preferred_locale: string | undefined;
+
+function read_preferred_locale(settings: unknown): string | undefined {
+	if (settings === null || typeof settings !== "object") return undefined;
+	const ree_settings = (settings as Record<string, unknown>).ree;
+	if (ree_settings === null || typeof ree_settings !== "object") return undefined;
+	const translation = (ree_settings as Record<string, unknown>).translation;
+	if (translation === null || typeof translation !== "object") return undefined;
+	const locale = (translation as Record<string, unknown>).defaultLocale;
+	return typeof locale === "string" && locale.length > 0 ? locale : undefined;
+}
+
+connection.onInitialize(async (params: InitializeParams): Promise<InitializeResult> => {
 	profile_cache.clear();
+	preferred_locale = read_preferred_locale(params.initializationOptions);
 
 	return {
 		capabilities: {
@@ -86,6 +103,12 @@ connection.onInitialize(async (_params: InitializeParams): Promise<InitializeRes
 
 connection.onInitialized(() => {
 	// Ready to accept document changes and requests.
+});
+
+connection.onDidChangeConfiguration((params) => {
+	const updated = read_preferred_locale(params.settings);
+	if (updated === preferred_locale) return;
+	preferred_locale = updated;
 });
 
 // ---------------------------------------------------------------------------
@@ -169,7 +192,7 @@ connection.onDefinition(async (params) => {
 		const entry = documents.get(params.textDocument.uri);
 		const text = entry?.document.getText() ?? "";
 		const project_profile = await profile_for_document(params.textDocument.uri);
-		return find_definition(text, params.position, params.textDocument.uri, project_profile?.project_root, project_profile);
+		return find_definition(text, params.position, params.textDocument.uri, project_profile?.project_root, project_profile, preferred_locale);
 	} catch (err: any) {
 		console.error(`ree-lsp definition error: ${err.message ?? err}`);
 		return null;

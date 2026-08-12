@@ -10,9 +10,9 @@
  */
 
 import type { Location, Position } from "vscode-languageserver";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, sep } from "node:path";
 
 import { find_token_at } from "../parser/contexts";
 import { position_to_offset } from "../documents/positions";
@@ -28,6 +28,7 @@ export function find_definition(
 	document_uri: string,
 	project_root?: string,
 	profile?: ReeProjectProfile | null,
+	preferred_locale?: string,
 ): Location | undefined {
 	const offset = position_to_offset(text, position);
 	const token = find_token_at(text, offset);
@@ -63,48 +64,84 @@ export function find_definition(
 		return basic_component_target(token.tag_name, project_root);
 	}
 
-	// Translation key → jump to key position in the first locale JSON file
+	// Translation key -> jump to the file that actually defines the key,
+	// preferring the most specific locale directory for this template.
 	if (token.type === "translation" && token.translation_key) {
 		const from_file = file_uri_to_path(document_uri) ?? "";
-		const definition_files = profile?.translation_definition_files?.(from_file);
-		if (definition_files) {
-			for (const file_path of definition_files) {
-				const pos = find_key_position(file_path, token.translation_key);
-				if (!pos) continue;
-				return {
-					uri: pathToFileURL(file_path).href,
-					range: { start: pos, end: { line: pos.line, character: pos.character + token.translation_key.length + 4 } },
-				};
-			}
+		const candidates = profile?.translation_definition_files?.(from_file) ?? fallback_locale_files(profile, project_root);
+
+		// A key defined in several locales resolves to the preferred one.
+		const preferred = order_by_locale(candidates, preferred_locale);
+		for (const file_path of preferred) {
+			const pos = find_key_position(file_path, token.translation_key);
+			if (!pos) continue;
+			return {
+				uri: pathToFileURL(file_path).href,
+				range: { start: pos, end: { line: pos.line, character: pos.character + token.translation_key.length + 4 } },
+			};
 		}
 
-		const roots = profile?.translation_roots ?? (project_root ? [join(project_root, ".reepolee", "i18n")] : []);
-		for (const root of roots) {
-			if (!existsSync(root)) continue;
-			try {
-				const files = readdirSync(root).filter(is_locale_file);
-				if (files.length === 0) continue;
-				const file_path = join(root, files[0]!);
-				const pos = find_key_position(file_path, token.translation_key);
-				if (pos) {
-					return {
-						uri: pathToFileURL(file_path).href,
-						range: { start: pos, end: { line: pos.line, character: pos.character + token.translation_key.length + 4 } },
-					};
-				}
-				// Key not found in this file - still jump to the file
-				return {
-					uri: pathToFileURL(file_path).href,
-					range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-				};
-			} catch {
-				// Unreadable root
-			}
-			break;
+		// Key is absent everywhere - open the preferred locale file so the
+		// key can be added where it belongs.
+		const first = preferred[0];
+		if (first) {
+			return {
+				uri: pathToFileURL(first).href,
+				range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+			};
 		}
 	}
 
 	return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Locale file selection
+// ---------------------------------------------------------------------------
+
+/** Locale files from every translation root, used when a profile has no resolver. */
+function fallback_locale_files(profile?: ReeProjectProfile | null, project_root?: string): string[] {
+	const roots = profile?.translation_roots ?? (project_root ? [project_root] : []);
+	const files: string[] = [];
+
+	for (const root of roots) {
+		if (!existsSync(root)) continue;
+		try {
+			const names = readdirSync(root).filter(is_locale_file);
+			names.sort();
+			for (const name of names) {
+				files.push(join(root, name));
+			}
+		} catch {
+			// Unreadable root
+		}
+	}
+
+	return files;
+}
+
+/**
+ * Move files for the preferred locale to the front, keeping the existing
+ * specificity order within each group. Matching is case-insensitive so
+ * `en-us.json` satisfies a preferred locale of `en-US`.
+ */
+function order_by_locale(files: string[], locale?: string): string[] {
+	if (!locale) return files;
+
+	const wanted = `${locale.toLowerCase()}.json`;
+	const matching: string[] = [];
+	const rest: string[] = [];
+
+	for (const file_path of files) {
+		const name = file_path.slice(file_path.lastIndexOf(sep) + 1).toLowerCase();
+		if (name === wanted) {
+			matching.push(file_path);
+		} else {
+			rest.push(file_path);
+		}
+	}
+
+	return [...matching, ...rest];
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +202,7 @@ function resolve_file(base_path: string): string | undefined {
 function file_uri_to_dir(uri: string): string | undefined {
 	try {
 		if (uri.startsWith("file://")) {
-			return dirname(new URL(uri).pathname);
+			return dirname(fileURLToPath(uri));
 		}
 		return dirname(uri);
 	} catch {
@@ -175,8 +212,10 @@ function file_uri_to_dir(uri: string): string | undefined {
 
 function file_uri_to_path(uri: string): string | undefined {
 	try {
+		// `new URL().pathname` yields "/C:/..." on Windows and leaves percent
+		// escapes intact, which breaks path comparisons against project roots.
 		if (uri.startsWith("file://")) {
-			return new URL(uri).pathname;
+			return fileURLToPath(uri);
 		}
 		return uri;
 	} catch {
@@ -189,12 +228,11 @@ function file_uri_to_path(uri: string): string | undefined {
 // ---------------------------------------------------------------------------
 
 /**
- * Find the line/character position of a dotted key (e.g. "labels.row_count")
- * in a potentially nested JSON file.
+ * Find the line/character position of a dotted key (e.g. "ui.title")
+ * in a nested JSON file.
  *
- * Walks line-by-line tracking the current nesting path so that
- * `routes.nav.home` resolves to the correct `"home"` inside `"nav"`
- * inside `"routes"`, not the first `"home"` anywhere in the file.
+ * Tracks the object path while scanning so that `ui.title` matches the
+ * `"title"` nested inside `"ui"`, not the first `"title"` anywhere.
  */
 function find_key_position(file_path: string, dotted_key: string): { line: number; character: number } | undefined {
 	let text: string;
@@ -208,73 +246,43 @@ function find_key_position(file_path: string, dotted_key: string): { line: numbe
 	if (segments.length === 0) return undefined;
 
 	const lines = text.split("\n");
-	const path_stack: string[] = [];
+	const path: string[] = [];
+	let pending_key: string | null = null;
 
-	for (let li = 0; li < lines.length; li++) {
-		const line = lines[li]!;
+	for (let line_index = 0; line_index < lines.length; line_index++) {
+		const line = lines[line_index]!;
+		const key_match = line.match(/^\s*"((?:[^"\\]|\\.)*)"\s*:/);
+		const key = key_match ? key_match[1]! : null;
 
-		// Track object depth: count { vs } to know when we exit an object
-		for (const ch of line) {
-			if (ch === "{") path_stack.push("");
-			if (ch === "}") path_stack.pop();
+		if (key !== null) {
+			// The outermost `{` contributes an unnamed level, so a key at the
+			// document root sits at path length 1.
+			const candidate = [...path.slice(1), key];
+			if (candidate.length === segments.length && candidate.every((part, i) => part === segments[i])) {
+				const character = line.indexOf(`"${key}"`);
+				return { line: line_index, character: character >= 0 ? character : 0 };
+			}
+			pending_key = key;
 		}
 
-		// Extract key from "key": or "key" : pattern
-		const key_match = line.match(/^\s*"([^"]+)"\s*:/);
-		if (!key_match) continue;
-
-		const key = key_match[1]!;
-
-		// Update the path at the current nesting depth
-		const depth = path_stack.length;
-		// Trim path_stack to depth (accounting for keys at same level)
-		while (path_stack.length > 0 && path_stack[path_stack.length - 1] === "") {
-			path_stack.pop();
-		}
-
-		// Build the current path from the stack + this key
-		// The stack contains ancestor keys at each nesting level
-		// We need to match: segments[0] at depth 0, segments[1] at depth 1, etc.
-		const expected_depth = segments.length - 1;
-
-		// Check if this key matches the last segment at the right depth
-		if (key === segments[segments.length - 1]) {
-			// Verify ancestors by walking up the file
-			if (matches_ancestors(lines, li, segments.slice(0, -1))) {
-				const char = line.indexOf(`"${key}"`);
-				return { line: li, character: char >= 0 ? char : 0 };
+		// Apply brace movement after the key check so a key and its opening
+		// brace on the same line nest correctly.
+		for (const char of strip_strings(line)) {
+			if (char === "{") {
+				path.push(pending_key ?? "");
+				pending_key = null;
+			} else if (char === "}") {
+				path.pop();
 			}
 		}
+
+		if (key === null) pending_key = null;
 	}
 
 	return undefined;
 }
 
-/** Walk backward from a line to verify ancestor keys exist in enclosing objects. */
-function matches_ancestors(lines: string[], from_line: number, ancestors: string[]): boolean {
-	if (ancestors.length === 0) return true;
-
-	let depth = 0;
-	const needed = [...ancestors]; // shallow copy, we match from innermost outward
-
-	for (let li = from_line - 1; li >= 0 && needed.length > 0; li--) {
-		const line = lines[li]!;
-
-		// Track braces
-		for (const ch of line) {
-			if (ch === "}") depth++;
-			if (ch === "{") depth--;
-		}
-
-		// At depth 0, we're at the right nesting level for the next ancestor
-		if (depth === 0) {
-			const key_match = line.match(/^\s*"([^"]+)"\s*:/);
-			if (key_match && key_match[1] === needed[needed.length - 1]) {
-				needed.pop();
-				depth = 1; // move to next outer level
-			}
-		}
-	}
-
-	return needed.length === 0;
+/** Blank out string contents so braces inside values do not affect nesting. */
+function strip_strings(line: string): string {
+	return line.replace(/"(?:[^"\\]|\\.)*"/g, '""');
 }

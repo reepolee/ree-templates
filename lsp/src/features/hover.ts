@@ -123,7 +123,7 @@ function hover_for_token(token: import("../parser/ast").Token, profile?: ReeProj
 							doc += `| ${locale.toUpperCase()} | **${cell}** |\n`;
 						}
 					} else {
-						doc += "_(key not found in export - may still exist in DB)_";
+						doc += "_(key not found in any locale file)_";
 					}
 				}
 			}
@@ -178,7 +178,6 @@ function lookup_all_locale_values(key: string, profile: ReeProjectProfile, docum
 		} catch {
 			// Skip unreadable roots
 		}
-		break; // Only process first translation root
 	}
 
 	return results;

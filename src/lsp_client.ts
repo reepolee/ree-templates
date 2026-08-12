@@ -35,6 +35,8 @@ import {
 	type ServerOptions,
 } from "vscode-languageclient/node";
 
+import { get_default_locale } from "./i18n/settings";
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -134,9 +136,16 @@ export function create_lsp_client(context: vscode.ExtensionContext): LanguageCli
 
 	const client_options: LanguageClientOptions = {
 		documentSelector: [{ scheme: "file", language: language_id }],
+		initializationOptions: {
+			ree: {
+				translation: {
+					defaultLocale: get_default_locale(),
+				},
+			},
+		},
 		synchronize: {
 			fileEvents: [
-				vscode.workspace.createFileSystemWatcher("**/.reepolee/i18n/*.json"),
+				vscode.workspace.createFileSystemWatcher("**/locales/*.json"),
 				vscode.workspace.createFileSystemWatcher("**/src/public/**/*.json"),
 			],
 		},
