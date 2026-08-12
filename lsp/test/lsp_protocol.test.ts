@@ -57,7 +57,12 @@ function send_message(stdin: { write(data: Uint8Array): void }, msg: Record<stri
 	const body = JSON.stringify(msg);
 	const header = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n`;
 	const encoder = new TextEncoder();
-	stdin.write(encoder.encode(header + body));
+	try {
+		stdin.write(encoder.encode(header + body));
+	} catch {
+		// The server closes stdin once it has handled `shutdown`, so the
+		// trailing `exit` notification can race with the pipe closing.
+	}
 }
 
 let id_counter = 0;
@@ -73,7 +78,7 @@ function spawn_server(): {
 	server: Subprocess<"pipe", "pipe", "pipe">;
 	read_message: () => Promise<Record<string, unknown> | null>;
 	send_message: (msg: Record<string, unknown>) => void;
-	kill: () => void;
+	kill: () => Promise<void>;
 } {
 	const server = spawn({
 		cmd: ["bun", "run", "src/server.ts", "--stdio"],
@@ -91,9 +96,13 @@ function spawn_server(): {
 		server,
 		read_message: () => read_message(reader),
 		send_message: (msg) => send_message(server.stdin, msg),
-		kill: () => {
+		// Await exit so a killed server cannot leak pending stdio writes into
+		// the next test, which surfaces as a stray EPIPE.
+		kill: async () => {
+			try { await reader.cancel(); } catch { /* already closed */ }
 			try { reader.releaseLock(); } catch { /* */ }
 			server.kill();
+			await server.exited;
 		},
 	};
 }
@@ -134,7 +143,7 @@ describe("ree-lsp protocol smoke test", () => {
 		send_message({ jsonrpc: "2.0", id: next_id(), method: "shutdown", params: null });
 		await read_message();
 		send_message({ jsonrpc: "2.0", method: "exit", params: null });
-		kill();
+		await kill();
 	});
 
 	test("initialized notification is accepted", async () => {
@@ -155,7 +164,7 @@ describe("ree-lsp protocol smoke test", () => {
 
 		send_message({ jsonrpc: "2.0", id: next_id(), method: "shutdown", params: null });
 		send_message({ jsonrpc: "2.0", method: "exit", params: null });
-		kill();
+		await kill();
 	});
 
 	test("didOpen and didChange do not crash", async () => {
@@ -202,7 +211,7 @@ describe("ree-lsp protocol smoke test", () => {
 		send_message({ jsonrpc: "2.0", id: next_id(), method: "shutdown", params: null });
 		await read_message();
 		send_message({ jsonrpc: "2.0", method: "exit", params: null });
-		kill();
+		await kill();
 	});
 
 	test("shutdown returns null", async () => {
@@ -225,7 +234,7 @@ describe("ree-lsp protocol smoke test", () => {
 		expect(response!.result).toBeNull();
 
 		send_message({ jsonrpc: "2.0", method: "exit", params: null });
-		kill();
+		await kill();
 	});
 
 	test("exit notification causes server to terminate", async () => {
@@ -272,6 +281,6 @@ describe("ree-lsp protocol smoke test", () => {
 		send_message({ jsonrpc: "2.0", id: next_id(), method: "shutdown", params: null });
 		await read_message();
 		send_message({ jsonrpc: "2.0", method: "exit", params: null });
-		kill();
+		await kill();
 	});
 });

@@ -12,7 +12,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, dirname, basename } from "node:path";
+import { join, dirname, basename, relative, sep } from "node:path";
 
 import type { ReeProjectProfile, ResolvedTarget } from "./index";
 import { is_locale_file, within_base, flatten_json, TEMPLATE_EXT } from "./index";
@@ -112,11 +112,47 @@ function scan_templates(root: string, out: string[]): void {
 }
 
 /**
+ * Template name relative to a root, without extension and locale variant.
+ * Uses posix separators to match the runtime's include paths.
+ */
+function template_name_in(root: string, file_path: string): string {
+	const rel = relative(root, file_path).split(sep).join("/");
+	return strip_locale_variant(rel.slice(0, -TEMPLATE_EXT.length));
+}
+
+/**
+ * Route module mounts declared by directory layout: any subdirectory of a
+ * route root holding an `index.ts` is mounted under its own name. Mirrors
+ * mount_route_modules_from_dir() in lib/route_module.ts, which is the only
+ * way mounts are registered - reading the layout avoids executing project code.
+ */
+function module_mounts_in(root: string): { code: string; root: string }[] {
+	const mounts: { code: string; root: string }[] = [];
+
+	let entries: import("node:fs").Dirent[];
+	try {
+		entries = readdirSync(root, { withFileTypes: true });
+	} catch {
+		return mounts;
+	}
+
+	for (const entry of entries) {
+		if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
+		const module_root = join(root, entry.name);
+		if (!existsSync(join(module_root, "index.ts"))) continue;
+		mounts.push({ code: entry.name, root: module_root });
+	}
+
+	return mounts;
+}
+
+/**
  * Build a tag -> target index over every root.
  *
  * Component roots are applied last and overwrite unconditionally, so a shared
  * component shadows a same-named routes-tree file. Route roots fill gaps
- * first-wins, matching precompile.ts.
+ * first-wins, matching precompile.ts. Mounted modules name their templates
+ * with the module code prefix, as the runtime does.
  */
 function component_index(component_roots: string[], route_roots: string[]): Map<string, ResolvedTarget> {
 	const cache_key = [...component_roots, "|", ...route_roots].join(";");
@@ -124,13 +160,23 @@ function component_index(component_roots: string[], route_roots: string[]): Map<
 
 	const index = new Map<string, ResolvedTarget>();
 
+	const add = (file_path: string, template_name: string) => {
+		const tag = strip_locale_variant(basename(file_path, TEMPLATE_EXT));
+		if (index.has(tag)) return;
+		index.set(tag, { kind: "template", file_path, template_name });
+	};
+
 	for (const root of route_roots) {
+		const mounts = module_mounts_in(root);
 		const files: string[] = [];
 		scan_templates(root, files);
+
 		for (const file_path of files) {
-			const tag = strip_locale_variant(basename(file_path, TEMPLATE_EXT));
-			if (index.has(tag)) continue;
-			index.set(tag, { kind: "template", file_path, template_name: tag });
+			const mount = mounts.find((candidate) => within_base(file_path, candidate.root));
+			const name = mount
+				? `${mount.code}/${template_name_in(mount.root, file_path)}`
+				: template_name_in(root, file_path);
+			add(file_path, name);
 		}
 	}
 
@@ -139,7 +185,12 @@ function component_index(component_roots: string[], route_roots: string[]): Map<
 		scan_templates(root, files);
 		for (const file_path of files) {
 			const tag = strip_locale_variant(basename(file_path, TEMPLATE_EXT));
-			index.set(tag, { kind: "template", file_path, template_name: `components/${tag}` });
+			// components/ wins outright over a same-named routes-tree file.
+			index.set(tag, {
+				kind: "template",
+				file_path,
+				template_name: `$components/${template_name_in(root, file_path)}`,
+			});
 		}
 	}
 

@@ -68,7 +68,8 @@ describe("Translation hover", () => {
 		const profile = fake_profile(translation_root);
 		const hover = compute_hover("{_ ui.title }", { line: 0, character: 5 }, profile, "file:///project/routes/home.ree");
 		const value = hover_value(hover);
-		const locale_values = value.match(/`value-\d+`/g);
+		// Values render bold inside the locale table.
+		const locale_values = value.match(/\*\*value-\d+\*\*/g);
 
 		expect(locale_values?.length).toBe(12);
 	});
