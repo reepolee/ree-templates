@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 
-import { loadTranslations, getTranslationKeys, isDbTranslationMode } from './loader';
+import { loadTranslations, getTranslationKeys } from './loader';
 import { is_locale_file, locale_file_name } from './locale_file';
 import { get_supported_locales } from './settings';
 
@@ -95,11 +95,6 @@ export function createTranslationCodeActionProvider(): vscode.CodeActionProvider
 			context: vscode.CodeActionContext
 		): vscode.CodeAction[] {
 			const actions: vscode.CodeAction[] = [];
-
-			// DB mode (reepolee-dev): translations live in the DB, not in files
-			// under routes/. Offering to create/write locale JSONs would violate
-			// the DB-first policy, so no write-back quick-fixes are provided.
-			if (isDbTranslationMode(document.fileName)) return actions;
 
 			for (const diagnostic of context.diagnostics) {
 				if (diagnostic.code !== DIAGNOSTIC_CODE) continue;

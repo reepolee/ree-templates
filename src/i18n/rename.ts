@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { findTranslationDirs, isDbTranslationMode } from './loader';
+import { findTranslationDirs } from './loader';
 import { is_locale_file } from './locale_file';
 
 /**
@@ -53,10 +53,6 @@ export function createTranslationRenameProvider(): vscode.RenameProvider {
 			document: vscode.TextDocument,
 			position: vscode.Position
 		): Promise<vscode.Range | { range: vscode.Range; placeholder: string } | undefined> {
-			// DB mode (reepolee-dev): keys live in the DB. Renaming would rewrite
-			// .ree files without updating the DB, leaving a broken half-rename.
-			if (isDbTranslationMode(document.fileName)) return undefined;
-
 			const line = document.lineAt(position.line).text;
 			const tag = findTagAtPosition(line, position.character);
 			if (!tag) return undefined;
@@ -75,9 +71,6 @@ export function createTranslationRenameProvider(): vscode.RenameProvider {
 			position: vscode.Position,
 			newName: string
 		): Promise<vscode.WorkspaceEdit | undefined> {
-			// DB mode: disabled (see prepareRename).
-			if (isDbTranslationMode(document.fileName)) return undefined;
-
 			const line = document.lineAt(position.line).text;
 			const tag = findTagAtPosition(line, position.character);
 			if (!tag) return undefined;

@@ -4,8 +4,16 @@ A lightweight rendering layer that wraps a template engine, injects shared conte
 
 ---
 
-## Setup
+## Two-layer component architecture (clarified)
+The codebase has two distinct things both called "components," and the plan touches only the first:
+- **ReeTags** (`.ree` files whose **basename contains a hyphen**, e.g. `star-rating.ree` — in `components/`, the `routes/` tree, or mounted module roots) - server-rendered, compiled by the `.ree` engine at request time from `props.attributes`/`props.children`. The hyphen in the tag name is what marks `<tag-name>` as a component invocation: a tag is only eligible if its name contains a hyphen (the preprocessor's `cust_elem_regex` requires it), so a hyphenless file like `routes/foo.ree` is a plain template (reachable via `render()`/`{#include}`, never via `<foo>`). Any eligible tag is auto-routed to a component file - `components/<tag-name>.ree` first, then a same-named hyphenated file in the routes tree (see `internals/REE_TEMPLATES.md` "Component includes" for the full resolution order). This is what `tags` mode targets.
+- **Web components** (`static/web-components/*.js`, `static/*.js`) - real browser `customElements.define(...)` elements (`date-input`, `markdown-editor`, `validation-error`, `toasts-area`, `title-display`). These render blank server-side and hydrate client-side; they are loaded via `<script src="...">` and are orthogonal to which server template produced their surrounding HTML. `<field-wrapper>` is not a registered custom element anywhere in `static/` - it's inert markup styled via `app.css`, used identically by both flat templates and ReeTag components.
 
+---
+
+
+## Setup
+7
 Before calling any render functions, initialize the module once at app startup - typically in your server entry point.
 
 ```ts
@@ -80,8 +88,7 @@ When `ctx` is provided (from `create_ctx(req)`), the following variables are aut
 | Variable            | Source                                 | Description                           |
 | ------------------- | -------------------------------------- | ------------------------------------- |
 | `request_url`       | `ctx.request_url` (pathname + search)  | Relative URL, e.g. `/products?page=2` |
-| `lang`              | `X-Lang` header → `lang` cookie → `en` | Active language code                  |
-| `locale`            | `ctx.locale`                           | Locale string, e.g. `"sl-SI"`         |
+| `locale`            | `ctx.locale`                           | Active BCP 47 locale, e.g. `"sl-si"`  |
 | `user`              | Session resolved via `resolve_session` | Logged-in user object or `null`       |
 | `toasts`            | `ctx.toasts`                           | Array of pending toast notifications  |
 | `rendered_at`       | ISO timestamp string                   | Render timestamp                      |
@@ -89,9 +96,9 @@ When `ctx` is provided (from `create_ctx(req)`), the following variables are aut
 | `csrf_token`        | `X-CSRF-Token` request header          | CSRF token for forms                  |
 | `dark_mode`         | `ctx.dark_mode`                        | Boolean, dark mode preference         |
 | `theme_class`       | `ctx.theme_class`                      | CSS class for theme                   |
-| `active_languages`  | Filtered language list                 | Available languages for language switch|
-| `language_names`    | Language name map                      | Map of language codes to display names|
-| `translations`      | `ctx.translations`                     | Merged translations for this request's lang + route namespace. Read via `{_ path }` / `{- path }`, not directly |
+| `active_locales`    | `config/supported_locales.ts`          | Available locales for the locale switcher |
+| `locale_names`      | `config/supported_locales.ts`          | Map of locale codes to display names   |
+| `translations`      | `ctx.translations`                     | Merged translations for this request's UI locale and route namespace. Read via `{_ path }` / `{- path }`, not directly |
 
 In development mode (`is_dev: true`), two additional debug variables are injected:
 
@@ -190,13 +197,13 @@ js_date_to_locale_string(dateString: string | Date, locale?: string): string
 **Parameters:**
 
 - `date_string` - ISO date string (e.g., `"2024-01-15T10:30:00Z"`)
-- `locale` - Language code (default: `props.locale`, resolved from the active language)
+- `locale` - BCP 47 locale (default: `props.locale`, resolved from the active locale)
 
 **Template example:**
 
 ```ree
 <p>Created: {= js_date_to_locale_string(record.created_at) }</p>
-<p>Joined: {= js_date_to_locale_string(record.joined_date, "en-US") }</p>
+<p>Joined: {= js_date_to_locale_string(record.joined_date, "en-us") }</p>
 ```
 
 #### `js_time_to_locale_string(date_string, locale?)`
@@ -210,7 +217,7 @@ js_time_to_locale_string(dateString: string | Date, locale?: string): string
 **Parameters:**
 
 - `date_string` - ISO date string
-- `locale` - Language code (default: `props.locale`)
+- `locale` - BCP 47 locale (default: `props.locale`)
 
 **Template example:**
 
@@ -229,7 +236,7 @@ js_datetime_to_locale_string(input: unknown, locale?: string): string
 **Parameters:**
 
 - `date_string` - ISO date string
-- `locale` - Language code (default: `props.locale`)
+- `locale` - BCP 47 locale (default: `props.locale`)
 
 **Template example:**
 
@@ -256,7 +263,7 @@ display_currency(val: number, locale?: string, hide_zero?: boolean, symbol?: str
 
 ```ree
 <p>{~ display_currency(record.price) }</p>
-<p>{~ display_currency(record.tax, "en-US", false, "$") }</p>
+<p>{~ display_currency(record.tax, "en-us", false, "$") }</p>
 ```
 
 #### `display_percent(val, locale?)`
@@ -347,13 +354,13 @@ url(path: string): string
 
 #### `localized_path(canonical_path)`
 
-Converts a canonical URL path to the current language's localized version using the pre-built route maps. All internal links, form actions, and redirects should use this helper so they work in every language.
+Converts a canonical URL path to the current locale's localized version using the pre-built route maps. All internal links, form actions, and redirects should use this helper so they work in every configured locale.
 
 ```ts
 localized_path(canonicalPath: string): string
 ```
 
-When the current language is Slovenian (`sl`), `/auth/login` becomes `/avtentikacija/prijava`. If no localization exists, the canonical path is returned unchanged.
+When the current locale is Slovenian (`sl-si`), `/auth/login` becomes `/avtentikacija/prijava`. If no localization exists, the canonical path is returned unchanged.
 
 **Template example:**
 
@@ -363,7 +370,7 @@ When the current language is Slovenian (`sl`), `/auth/login` becomes `/avtentika
 <form method="POST" action="{~ localized_path(props.action) }">
 ```
 
-See [AGENTS.md](CONTEXT.md#route-alias) for documentation on URL localization via `route_name` keys in translation files.
+See [CONTEXT.md](CONTEXT.md#route-alias) for documentation on URL localization via `route_name` keys in locale files.
 
 #### `is_current(page_url)`
 
@@ -396,6 +403,10 @@ These helpers are also available in every template without passing them:
 | `is_checked(key, value, filter_params)` | `(string, string\|number, Record<string,string>) => boolean` | Checks if a filter value is active in URL params |
 | `urlencode(str)` | `(string) => string` | URL-encodes a string |
 | `urldecode(str)` | `(string) => string` | URL-decodes a string |
+| `md(source)` | `(string) => string` | Renders a `markdown`-type field's stored value to HTML via `Bun.markdown.html()` - use with unescaped output (`{~ md(record.field) }`) |
+| `image_thumbnail(src, size?)` | `(string, number?) => string` | Renders a square thumbnail `<img>` for a stored image path (default 100px), or a placeholder box when empty |
+| `file_link(src)` | `(string) => string` | Renders a filename/download `<a>` link for a stored file path, or an em-dash when empty |
+| `file_icon_name(filename)` | `(string) => string` | Resolves a `<ree-icon>` name from a filename's extension (PDF, Word, Excel, CSV, PowerPoint, Zip), falling back to a generic file icon |
 | `key_values(obj)` | `(Record<string,any>) => string` | Renders object as HTML attribute key=value pairs |
 | `nav_label(key, nav?)` | `(string, Record<string,any>?) => string` | Looks up a navigation label by dot-separated key |
 
@@ -449,7 +460,7 @@ return render("dashboard", {
 	data: {
 		records: data,
 		format_price: (amount) => `$${(amount / 100).toFixed(2)}`,
-		format_date: (date) => new Date(date).toLocaleDateString("en-US"),
+		format_date: (date) => new Date(date).toLocaleDateString("en-us"),
 		status_badge: (status) => {
 			const colors = { pending: "yellow", active: "green", inactive: "gray" };
 			return `<span class="badge-${colors[status]}">${status}</span>`;
@@ -494,13 +505,13 @@ Throws if called before `initialize_render()`.
 
 ---
 
-## Language Resolution
+## Locale Resolution
 
-`lang` is resolved in priority order:
+`locale` is resolved in priority order:
 
-1. `X-Lang` request header
-2. `lang` cookie
-3. Falls back to `"en"`
+1. `X-Locale` request header
+2. `locale` cookie
+3. `default_locale` from `config/supported_locales.ts`
 
 ---
 
@@ -668,8 +679,8 @@ data: {
 ### Translation lookups don't need `{#with}`
 
 `{_ path }` / `{- path }` already resolve against `props.translations` directly, with no repeated prefix
-to eliminate and no missing-key crash risk - so the old pattern of wrapping a section in `{#with props.ui}`
-to shorten repeated `props.ui.x` accesses is no longer needed for translation data:
+to eliminate and no missing-key crash risk - so wrapping a section in `{#with props.ui}`
+to shorten repeated `props.ui.x` accesses is not needed for translation data:
 
 ```ree
 <!-- No {#with} needed - {_ } already strips the prefix and adds a {last_segment} safety net -->
@@ -735,6 +746,36 @@ Helpers (`yes_no`, `localized_path`, `display_currency`, etc.) are injected as l
 {/each}
 ```
 
+### `{#with}` scope doesn't reach into component slots
+
+A custom-element tag's slot content (`<app-banner>...</app-banner>`) is compiled into its own slot
+function, invoked with the raw top-level `props` object - **not** the `with`-scoped alias an enclosing
+`{#with}` block created. Bare identifiers that only resolve through that `with` scope will throw
+`ReferenceError: x is not defined` at render time, even though the exact same expression works fine
+outside the component tag:
+
+```ree
+{#with props}
+  {#if form_error}
+    <!-- ❌ Breaks - form_error is not in scope inside the slot function -->
+    <app-banner type="red">{= form_error}</app-banner>
+  {/if}
+{/with}
+```
+
+```ree
+{#with props}
+  {#if form_error}
+    <!-- ✅ Works - props is always the real top-level object -->
+    <app-banner type="red">{= props.form_error}</app-banner>
+  {/if}
+{/with}
+```
+
+Always use a fully-qualified `props.x` path (or `record.x`, etc. - whatever the outer non-`with` variable
+is) for any expression inside a component tag's slot content. `{_ }`/`{- }` translation lookups are
+unaffected since they never participate in `with` scoping to begin with.
+
 ### Nested `{#with}` blocks
 
 You can nest `{#with}` blocks - the inner scope shadows the outer one for matching properties. `{_ }`/`{- }`
@@ -780,7 +821,7 @@ Key points:
 
 - **Headers** (`{#with props}`): `{= columns.name.class }` resolves as `props.columns.name.class` (structural data, stays `{= }`). `{_ labels.name }` resolves against `props.translations.labels.name` regardless of the `with` scope.
 - **Cells** (`{#with record}`): `{= name }` resolves as `record.name`. The class still uses the full `{= props.columns.name.class }` path because `props` is a local variable that takes precedence over the with context.
-- **Nested child grids**: Child headers also use `{#with props}`, child rows use `{#with child}` for their cells - same pattern, different loop variable. Note `child_ui`/`child_fields` are handler-flattened plain data (from the child route's own `ctx.translations`, resolved separately), not `props.translations` - they stay `{= }`, not `{_ }`. See `docs/adr/0001-translation-lookup-tags.md`.
+- **Nested child grids**: Child headers also use `{#with props}`, child rows use `{#with child}` for their cells - same pattern, different loop variable. Note `child_ui`/`child_fields` are handler-flattened plain data (from the child route's own `ctx.translations`, resolved separately), not `props.translations` - they stay `{= }`, not `{_ }`. See `internals/adr/0001-translation-lookup-tags.md`.
 - **Generator alignment**: The `render_field_header()` function emits bare `{= columns.* }` (no `props.` prefix, structural data) and `{_ labels.* }` (translation, ignores `with` scope) - both expecting the `{#with props}` wrapper for the structural half. The `render_field_cell()` function emits bare `{= name }` field names (no `record.` prefix), expecting the `{#with record}` wrapper.
 
 ### When NOT to use `{#with}`
@@ -860,7 +901,7 @@ but this is discouraged - it bypasses the missing-key marker, so a typo or an un
 renders as `""` instead of showing up as `{title}`. Reserve `{= }`/`{~ }` for everything that is not a
 translation lookup: `props.user`, `props.record`, loop variables, computed expressions.
 
-See `docs/adr/0001-translation-lookup-tags.md` for the full design rationale.
+See `internals/adr/0001-translation-lookup-tags.md` for the full design rationale.
 
 #### Control flow
 
@@ -923,13 +964,30 @@ Includes another template inline. The included template receives a merged copy o
 </product-card>
 ```
 
-Any tag whose name contains **at least one hyphen** is treated as a component invocation. The pre-processor converts it internally to `{#include("$components/tag-name", {children: <compiled slot>, attributes: { "type": "red" }})}`.
+Any tag whose name contains **at least one hyphen** is treated as a component invocation. The pre-processor converts it internally to `{#include("<resolved include path>", {children: <compiled slot>, attributes: { "type": "red" }})}`. The include path is resolved by an index built at startup (`precompile_templates()`, self-healed lazily in dev) in this order:
 
-- Slot content is compiled in the parent's scope and passed as `props.children`
+1. `components/<tag-name>.ree` → `$components/<tag-name>` (a shared component always shadows a same-named routes-tree file)
+2. Any `*.ree` file named `<tag-name>` in the routes tree → views-relative name (e.g. `<star-rating>` resolves `routes/examples/kitchen_sink/star-rating.ree` as `examples/kitchen_sink/star-rating`)
+3. Any same-named file in a mounted route-module root → `<module-code>/<name>` (views-tree files beat module files for a duplicate tag)
+
+A tag with no matching file anywhere is passed through as literal HTML (e.g. the native `<date-input>` web component). Because tag names are global, a route-local component with a duplicate basename is only resolved for templates in its own subtree if it is the first match in glob order - keep component tag names unique across the tree.
+
+**Locale variants of ReeTag components** resolve the same way as their include kind: `components/` components go through the raw `$components/` include path, whose variant chain keys on `props.locale`; routes-tree/module components go through `render()` by name, whose variant chain keys on `props.lang`. Today named renders pass `locale` but not `lang`, so a locale-suffixed variant of a routes-tree component (`star-rating.sl.ree`) is dormant until `lang` is provided - the same dormant state as every locale-suffixed named template.
+
+- Slot content is compiled as its own function and passed as `props.children` - it shares the parent's helpers and receives the same top-level `props` object, but it does **not** inherit any `{#with}` block the parent is nested in (see "`{#with}` scope doesn't reach into component slots" below)
 - HTML attributes are passed as `props.attributes` - template expressions `{= expr }`, `{~ expr }`, `{_ path }`, and `{- path }` inside attribute values ARE compiled, evaluated at render time (e.g. `title="{_ ui.reset_btn }"` resolves against `props.translations` with the same `{last_segment}` miss-marker `{_ }` gives everywhere else). `{@ path }` is body-only - it emits block-level HTML that can't sit inside a quoted attribute, so it is deliberately not recognized here.
 - Tags **without** a hyphen (e.g. `<banner>`) are treated as literal HTML and passed through unprocessed
 - Reads more like HTML - components can be authored and read in a natural slot/content style
 - The component receives `children` and reads from `props.children` instead of digging into `attributes.text`
+
+**Attribute spread shorthand - `...expr`:**
+
+```
+<my-h1 ...rest class="foo">{= title }</my-h1>
+<date-input ...props.translations.errors min="1900-01-01"></date-input>
+```
+
+Any `...expr` token in a tag's attribute region is expanded into the key/value pairs of the referenced object, evaluated at render time - equivalent to `{~ key_values(expr) }`. Works on ReeTag component tags, plain hyphen-less HTML elements, and custom elements without a matching `components/*.ree` file (like `<date-input>`). `expr` may be a bare identifier (`...rest`) or a dotted member path (`...props.translations.errors`); it does not support arbitrary expressions like function calls, bracket indexing, or ternaries - assign to a local first (`{{ const x = a[i]; }}`) if the value isn't already a plain path. Literal attributes after a spread win over spread properties, matching HTML's last-wins semantics.
 
 **Direct `{#include(...)}` - for computed prop objects:**
 
@@ -939,10 +997,6 @@ Any tag whose name contains **at least one hyphen** is treated as a component in
 ```
 
 Use this form when the props object itself must be built dynamically (computed keys, spread operator, conditional inclusion of fields). For static attributes, prefer ReeTag - it reads more like HTML and the component receives `children` naturally.
-
-**Expanding a ReeTag inline:**
-
-Run `ree: Expand ReeTag (inline component here)` (command palette, or right-click inside the tag) with the cursor on a `<tag-name>` invocation to replace the tag with the actual body of `components/tag-name.ree`, substituting each attribute and the slot content directly in place of `props.attributes.*` and `props.children`. Use this when a specific call site needs more control than the shared component allows (e.g. a form that needs to branch on internal markup) and extending the component itself isn't the right fix - the caller gets its own local copy to diverge from, and the original component is untouched.
 
 #### `<auto-complete>` component
 
@@ -991,6 +1045,88 @@ The component inherits `props.labels`, `props.record`, and `props.selectors` fro
 
 Just `rows` is enough to control dropdown height - `max-height` is computed as `rows × 32px`. If both `rows` and `max-height` attributes are set, `max-height` takes precedence.
 
+#### `<image-upload>` component
+
+The `<image-upload>` component (`components/image-upload.ree`, `static/image-upload.js`) is a click-to-browse / drag-and-drop widget that uploads directly to `POST /system/images/save` (the same endpoint the full `/system/images/new` editor uses) and writes the returned `s3_url` into a hidden input named by the `name` attribute, so it submits with the surrounding form like any other field.
+
+**Attributes:**
+
+| Attribute | Required | Description                                                             | Example         |
+| --------- | -------- | ------------------------------------------------------------------------ | --------------- |
+| `name`    | Yes      | Form field name for the hidden input holding the uploaded path            | `portrait_image`|
+| `value`   | No       | Existing stored path, for edit forms                                     | `record.portrait_image` |
+| `label`   | No       | Field label shown above the dropzone                                     | `Portrait Image`|
+| `folder`  | No       | S3/local storage subfolder for the upload                                | `teams/members` |
+| `module`  | No       | Module code required to upload - see Upload authorization below          | `admin`         |
+
+**Example:**
+
+```ree
+<image-upload name="portrait_image" value="{= record.portrait_image }" folder="members" label="{_ labels.portrait_image }" module="admin"></image-upload>
+```
+
+**Upload authorization:** `POST /system/images/save` always requires an authenticated session (`require_auth`). When `module` is set, the component also sends it as a form field, and the server additionally checks `require_module(auth_ctx, module)` - the request is rejected with `403 Forbidden` if the current user lacks that module. Leaving `module` unset means any authenticated user can upload; it does not bypass auth entirely. The page embedding `<image-upload>` should itself be gated (e.g. via `module` on its `RouteDefinition`, see [routes/AGENTS.md](../routes/AGENTS.md)) - the component only protects the upload action, not page visibility.
+
+**Generator integration:** a column whose name ends in `_image` is auto-detected as `field.type === "image"` (see `IMAGE_SUFFIXES` in `config/db_structure.ts`) and gets:
+- A form field rendered via `<image-upload>` (`generator/templates/fields/image.ree`).
+- A grid cell rendered via `{~ image_thumbnail(record.field) }` - a 100x100 thumbnail helper (`lib/template_helpers.ts`), falling back to a placeholder box when empty.
+- A `domain: "image"` entry in the generated `schema/table.ts` `columns` map, checked against the canonical `VARCHAR(255)` SQL type by `check_domain_compliance`.
+
+`generate_input_field` (`generator/crud/form_ree.ts`) does not know a route's `module` at generation time, so the generated `<image-upload>` tag never sets `module` automatically - add it by hand to the generated `form.ree` where an upload should be gated.
+
+**Seeding without the browser:** `bun reeman upload-image <table> <id> <column> <path|url> [--folder <name>] [--format webp|jpeg|png|avif] [--quality <1-100>]` (`generator/reeman/upload_image.ts`) runs a local file or remote URL through the same image pipeline (`lib/image_processor`) and writes the resulting URL straight into `<table>.<column> WHERE id = <id>` - no editor UI needed. Used to seed demo data from a module's install script.
+
+#### `<file-upload>` component
+
+The `<file-upload>` component (`components/file-upload.ree`, `static/file-upload.js`) is the document counterpart to `<image-upload>` - a click-to-browse / drag-and-drop widget that uploads directly to `POST /system/files/save` and writes the returned `s3_key` into a hidden input named by the `name` attribute, so it submits with the surrounding form like any other field. Accepted extensions: `.pdf`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt`, `.pptx`, `.txt`, `.csv`, `.zip`.
+
+**Attributes:**
+
+| Attribute       | Required | Description                                                        | Example         |
+| --------------- | -------- | -------------------------------------------------------------------- | --------------- |
+| `name`          | Yes      | Form field name for the hidden input holding the uploaded path       | `attachment_file` |
+| `value`         | No       | Existing stored path, for edit forms                                 | `record.attachment_file` |
+| `label`         | No       | Field label shown above the dropzone                                 | `Attachment`    |
+| `folder`        | No       | S3/local storage subfolder for the upload (static, ignored if `show-folder` is set) | `invoices` |
+| `folder-input`  | No       | ID of an existing input element to read the folder value from instead | `folder_field`  |
+| `show-folder`   | No       | Renders its own folder text input above the dropzone (`"true"`)      | `true`          |
+| `module`        | No       | Module code required to upload - same authorization model as `<image-upload>` | `admin` |
+
+**Example:**
+
+```ree
+<file-upload name="attachment_file" value="{= record.attachment_file }" folder="invoices" label="{_ labels.attachment_file }" module="admin"></file-upload>
+```
+
+**Upload authorization:** identical model to `<image-upload>` - `POST /system/files/save` requires an authenticated session, and setting `module` additionally requires `require_module(auth_ctx, module)` server-side.
+
+**Generator integration:** a column whose name ends in `_file` is auto-detected as `field.type === "file"` (see `FILE_SUFFIXES` in `config/db_structure.ts`) and gets:
+- A form field rendered via `<file-upload>` (`generator/templates/fields/file.ree`).
+- A grid cell rendered via `{~ file_link(record.field) }` - a filename/download-link helper (`lib/template_helpers.ts`) that renders an em-dash when empty. A companion `file_icon_name(filename)` helper resolves a `<ree-icon>` name by extension (PDF, Word, Excel, CSV, PowerPoint, Zip), falling back to a generic file icon.
+- A `domain: "file"` entry in the generated `schema/table.ts` `columns` map, checked against the same canonical `VARCHAR(255)` SQL type as image fields by `check_domain_compliance`.
+
+#### CRUD form-field ReeTags (`--template-tags tags` mode)
+
+The Reeman CRUD generator's `--template-tags tags` flag (see [generator/AGENTS.md](../generator/AGENTS.md) "`--template-tags`") renders each form field as a single ReeTag call instead of the default inlined `<input>`/`<select>` markup. Each of the following components self-contains its own `<field-wrapper>`/`<label>`/`<validation-error>` and reads `name`/`label`/`value` from `props.attributes`:
+
+| Component (`components/`)     | Generator field type      | Notes                                                                 |
+| ------------------------------ | -------------------------- | ---------------------------------------------------------------------- |
+| `input-text.ree`               | `input` (default/text)     |                                                                        |
+| `input-select.ree`             | `select`                   | Options via `props.options?.[name]`, not an HTML attribute            |
+| `input-checkbox.ree`           | `checkbox`                 |                                                                        |
+| `input-textarea.ree`           | `textarea`                 |                                                                        |
+| `input-date-masked.ree`        | `date`                     | Wraps the `<date-input>` web component (masked, locale-aware) - pre-existing component, `input-date.ree` is a plain `<input type="date">` and is not used here |
+| `input-datetime-local.ree`     | `datetime`/`timestamp`     | Plain `<input type="datetime-local">`, same as flat mode               |
+| `input-yes-no.ree`             | `yes_no`                   | Hardcoded 0/1 `<select>`, labels via `props.selectors["0"]`/`["1"]`   |
+| `input-markdown.ree`           | `markdown`                 | Wraps the `<markdown-editor>` web component                            |
+| `input-tags-select.ree`        | `tags`                     | Checkbox-group against a fixed vocabulary (`props.tag_options?.[name]`) - **not** the same as `input-tags.ree` (free-text chip entry), a different widget entirely |
+| `input-foreign-key.ree`        | plain foreign key          | Options via `props.fk_options?.[name]`                                |
+| `auto-complete.ree`            | `autocomplete` foreign key | Existing component, unchanged - see dedicated section above           |
+| `image-upload.ree`             | `image`                    | Existing component, unchanged - see dedicated section above           |
+| `file-upload.ree`              | `file`                     | Existing component, unchanged - see dedicated section above           |
+
+The generator's tag-mode wrapper calls are built in-memory (no `fields_tags/*.ree` files on disk) - see `TAGS_MODE_TAG`/`generate_tags_mode_field()` in `generator/crud/form_ree.ts`. Flat mode (`generator/templates/fields/*.ree`) still loads from disk via `apply_template()`.
+
 ### Path Resolution
 
 Includes and layouts support several path styles:
@@ -1023,6 +1159,22 @@ engine.clearCache();
 // Write rendered output to a file (creates directories as needed)
 await engine.writeOutput("dist/index.html", html);
 ```
+
+**Precompiling at startup (`$lib/template/precompile.ts`):** call
+`await precompile_templates(engine)` once on cold start. In prod it globs
+`routes/`, mounted route-module roots, and `components/` for `*.ree`, compiles
+each file once, and caches by template name and file path — `render()` and
+`{#include("$routes/…")}`/ReeTag includes then hit memory instead of disk per
+request (no per-render file read, no per-include recompile). It also builds the
+component index (tag → include path) that powers ReeTag resolution from
+`components/`, the routes tree, and module roots — see "Component includes"
+above for the resolution order. Dev only builds thecomponent/name registry; templates still recompile per render for hot reload, and a tag missing from the
+index triggers one lazy filesystem search (cached afterwards). The build is
+two-pass — the complete component index is registered for every root before
+any template is compiled, so ReeTag resolution never depends on root glob
+order. A template that fails to compile aborts boot with a loud error listing
+the offending file(s) (the project's fail-loud convention — no silent
+fallback). `bootstrap()` already wires this in.
 
 ### Template examples
 
@@ -1281,7 +1433,7 @@ export async function GET_products(req: BunRequest) {
 			page_title: "Our Products",
 			// Custom helpers passed in data (no separate `helpers` option)
 			price: (cents) => `$${(cents / 100).toFixed(2)}`,
-			publish_date: (iso) => new Date(iso).toLocaleDateString("en-US"),
+			publish_date: (iso) => new Date(iso).toLocaleDateString("en-us"),
 			stock_badge: (quantity) => {
 				if (quantity === 0) return '<span class="badge-red">Out of Stock</span>';
 				if (quantity < 5) return '<span class="badge-yellow">Low Stock</span>';
@@ -1333,4 +1485,4 @@ When a translation key is not found in the database, the system renders only the
 
 This behavior keeps the UI clean during development while still indicating that a key is missing. The full path is always available in the database and source code for reference.
 
-**Implementation:** three producers share this convention. `mark_missing_from()` in `lib/i18n.ts` backfills a non-English language when English has a key it doesn't, at translation-load time. `{_ path }` / `{- path }` template tags (see "Translation lookup tags" above) catch a key absent from `props.translations` entirely, at render time. `nav_label()` in `lib/template_helpers.ts` does the same for nav entries. All three extract only the last dot-segment for the placeholder.
+**Implementation:** three producers share this convention. `mark_missing_from()` in `lib/i18n.ts` marks a missing value in a non-default locale when the default locale has that key, at translation-load time. `{_ path }` / `{- path }` template tags (see "Translation lookup tags" above) catch a key absent from `props.translations` entirely, at render time. `nav_label()` in `lib/template_helpers.ts` does the same for nav entries. All three extract only the last dot-segment for the placeholder.

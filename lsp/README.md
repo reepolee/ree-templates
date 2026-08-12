@@ -63,8 +63,8 @@ ree-templates/lsp/
 
 - Embedded JavaScript/TypeScript intelligence is explicitly deferred to a
   future milestone.
-- DB-backed translations are read from `.reepolee/i18n/*.json`, the read-only
-  editor export. The language server never writes translation data.
+- Translations are read from BCP 47 locale JSON files co-located with the
+  templates. The language server never writes translation data.
 - Tree-sitter and TypeScript language-service bridging are out of scope for v1.
 
 ## License
