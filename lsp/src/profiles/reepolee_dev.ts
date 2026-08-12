@@ -3,7 +3,9 @@
  *
  * Conventions:
  * - Routes live in `routes/` (standard module-based routing)
- * - Components live in `components/` (hyphenated .ree files)
+ * - Any .ree file is usable as a ReeTag, named by its basename. Mirrors the
+ *   component index built in lib/template/precompile.ts: `components/` wins
+ *   outright, other roots fill gaps first-wins in root order.
  * - Translations are co-located JSON: a project-level root plus per-route
  *   overrides, each either a bare directory or a `locales/` subfolder
  * - Helper names & include resolver imported at runtime from the project
@@ -13,7 +15,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 
 import type { ReeProjectProfile, ResolvedTarget } from "./index";
-import { is_locale_file, resolve_template_file, within_base, flatten_json } from "./index";
+import { is_locale_file, within_base, flatten_json, TEMPLATE_EXT } from "./index";
 import { DEFAULT_HELPER_NAMES } from "./helper_loader";
 import { local_resolve } from "./include_loader";
 import type { ReeProjectConfig } from "./project_config";
@@ -29,8 +31,6 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 	const route_roots = config.template_roots.map((template_root) => join(project_root, template_root));
 	const component_roots = config.component_roots.map((component_root) => join(project_root, component_root));
 	const translation_roots = config.translation_roots.map((root) => join(project_root, root));
-	const views_dir = route_roots[0]!;
-	const components_dir = component_roots[0]!;
 
 	return {
 		project_root,
@@ -42,15 +42,18 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 		helper_names: DEFAULT_HELPER_NAMES,
 
 		resolve_include(path_value: string, from_file: string): ResolvedTarget | undefined {
-			return local_resolve(path_value, from_file, views_dir);
+			// A template may live under any route root, so try each in order
+			// and keep the first root that yields an existing file.
+			for (const views_dir of route_roots) {
+				const target = local_resolve(path_value, from_file, views_dir);
+				if (target) return target;
+			}
+			return undefined;
 		},
 
 		resolve_component(tag_name: string): ResolvedTarget | undefined {
-			const file_path = resolve_template_file(join(components_dir, tag_name));
-			if (!file_path) return undefined;
-			const safe = within_base(file_path, components_dir);
-			if (!safe) return undefined;
-			return { kind: "template", file_path: safe, template_name: `components/${tag_name}` };
+			const index = component_index(component_roots, route_roots);
+			return index.get(tag_name);
 		},
 
 		load_translation_index(locale_file: string, from_ree_file?: string): Map<string, string> | null {
@@ -61,6 +64,87 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 			return definition_files(project_root, from_ree_file);
 		},
 	};
+}
+
+// ---------------------------------------------------------------------------
+// ReeTag component index
+// ---------------------------------------------------------------------------
+
+/** Locale-variant suffix on a template name, e.g. `card.sl-SI.ree`. */
+const LOCALE_VARIANT_RE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})+$/i;
+
+let index_cache: { key: string; index: Map<string, ResolvedTarget> } | null = null;
+
+export function invalidate_component_index(): void {
+	index_cache = null;
+}
+
+/**
+ * Strip a trailing locale segment so `card.sl-SI` and `card` share one tag.
+ * Mirrors split_locale() in lib/template/precompile.ts.
+ */
+function strip_locale_variant(name: string): string {
+	const last_dot = name.lastIndexOf(".");
+	if (last_dot > 0 && LOCALE_VARIANT_RE.test(name.slice(last_dot + 1))) {
+		return name.slice(0, last_dot);
+	}
+	return name;
+}
+
+/** Every .ree file under a root, recursively. */
+function scan_templates(root: string, out: string[]): void {
+	let entries: import("node:fs").Dirent[];
+	try {
+		entries = readdirSync(root, { withFileTypes: true });
+	} catch {
+		return;
+	}
+
+	for (const entry of entries) {
+		const full_path = join(root, entry.name);
+		if (entry.isDirectory()) {
+			if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+			scan_templates(full_path, out);
+		} else if (entry.name.endsWith(TEMPLATE_EXT)) {
+			out.push(full_path);
+		}
+	}
+}
+
+/**
+ * Build a tag -> target index over every root.
+ *
+ * Component roots are applied last and overwrite unconditionally, so a shared
+ * component shadows a same-named routes-tree file. Route roots fill gaps
+ * first-wins, matching precompile.ts.
+ */
+function component_index(component_roots: string[], route_roots: string[]): Map<string, ResolvedTarget> {
+	const cache_key = [...component_roots, "|", ...route_roots].join(";");
+	if (index_cache && index_cache.key === cache_key) return index_cache.index;
+
+	const index = new Map<string, ResolvedTarget>();
+
+	for (const root of route_roots) {
+		const files: string[] = [];
+		scan_templates(root, files);
+		for (const file_path of files) {
+			const tag = strip_locale_variant(basename(file_path, TEMPLATE_EXT));
+			if (index.has(tag)) continue;
+			index.set(tag, { kind: "template", file_path, template_name: tag });
+		}
+	}
+
+	for (const root of component_roots) {
+		const files: string[] = [];
+		scan_templates(root, files);
+		for (const file_path of files) {
+			const tag = strip_locale_variant(basename(file_path, TEMPLATE_EXT));
+			index.set(tag, { kind: "template", file_path, template_name: `components/${tag}` });
+		}
+	}
+
+	index_cache = { key: cache_key, index };
+	return index;
 }
 
 // ---------------------------------------------------------------------------

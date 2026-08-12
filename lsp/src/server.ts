@@ -41,6 +41,7 @@ import { find_definition } from "./features/definition";
 import { compute_symbols, compute_folding_ranges } from "./features/symbols";
 import { format_document } from "./features/formatting";
 import { detect_profile, type ReeProjectProfile } from "./profiles/index";
+import { invalidate_component_index } from "./profiles/reepolee_dev";
 
 // ---------------------------------------------------------------------------
 // Create connection
@@ -149,6 +150,7 @@ connection.onDidCloseTextDocument((params) => {
 connection.onDidChangeWatchedFiles(() => {
 	invalidate_completion_translation_cache();
 	invalidate_hover_translation_cache();
+	invalidate_component_index();
 });
 
 // ---------------------------------------------------------------------------

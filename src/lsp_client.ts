@@ -147,6 +147,9 @@ export function create_lsp_client(context: vscode.ExtensionContext): LanguageCli
 			fileEvents: [
 				vscode.workspace.createFileSystemWatcher("**/locales/*.json"),
 				vscode.workspace.createFileSystemWatcher("**/src/public/**/*.json"),
+				// ReeTag components are indexed by basename from any .ree file,
+				// so creates/deletes anywhere invalidate the index.
+				vscode.workspace.createFileSystemWatcher("**/*.ree"),
 			],
 		},
 		// Don't flash "Loading..." in the status bar - the server starts
