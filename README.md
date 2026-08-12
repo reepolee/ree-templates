@@ -2,6 +2,9 @@ Formatter for REE templates.
 
 Ree templates are used by Reepolee for our Bun Apps.
 
+
+** v2.0 is a breaking change as it ONLY expects BCP47 formatted locale like en-us.json vs DB translations or en.json. 
+
 ** v1.1 is a breaking change as it expects BCP47 formatted locale like en-us.json vs just language en.json. Use 1.0.x versions if you need old format.
 
 ## Formatters
