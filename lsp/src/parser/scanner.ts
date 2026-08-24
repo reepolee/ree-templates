@@ -314,7 +314,7 @@ function classify_directive(start: number, range: SourceRange, raw: string, pref
 	const inner = raw.slice(inner_start, inner_end).trim();
 
 	if (prefix === "#") {
-		// {#if ...}, {#each ...}, {#with ...}, {#include("...")}, {#layout("...")}
+		// {#if ...}, {#each ...}, {#with ...}, {#switch ...}, {#case ...}, {#include("...")}, {#layout("...")}
 		if (inner.startsWith("if") && (inner.length === 2 || is_whitespace(inner[2]!) || inner[2] === "(")) {
 			return { type: "block_open" as TokenType, range, block_type: "if" };
 		}
@@ -323,6 +323,14 @@ function classify_directive(start: number, range: SourceRange, raw: string, pref
 		}
 		if (inner.startsWith("with ") || inner === "with") {
 			return { type: "block_open" as TokenType, range, block_type: "with" };
+		}
+		if (inner.startsWith("switch ") || inner === "switch") {
+			return { type: "block_open" as TokenType, range, block_type: "switch" };
+		}
+		if (inner.startsWith("case ") || inner === "case") {
+			// Extract condition expression after "case "
+			const cond = inner.startsWith("case ") ? inner.slice(5).trim() : undefined;
+			return { type: "block_open" as TokenType, range, block_type: "case", expression: cond };
 		}
 		if (inner.startsWith("include(")) {
 			const path = extract_string_arg(inner, "include");
@@ -341,7 +349,7 @@ function classify_directive(start: number, range: SourceRange, raw: string, pref
 	}
 
 	if (prefix === "/") {
-		const block_type = inner === "if" ? "if" : inner === "each" ? "each" : inner === "with" ? "with" : undefined;
+		const block_type = inner === "if" ? "if" : inner === "each" ? "each" : inner === "with" ? "with" : inner === "switch" ? "switch" as const : undefined;
 		return { type: "block_close" as TokenType, range, block_type };
 	}
 

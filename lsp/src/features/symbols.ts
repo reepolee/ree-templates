@@ -29,6 +29,7 @@ function collect_symbols(node: AstNode, text: string): DocumentSymbol[] {
 	if (node.type === "block" && node.block_type) {
 		const kind = node.block_type === "if" ? K.Namespace :
 			node.block_type === "each" ? K.Array :
+			node.block_type === "switch" ? K.Enum :
 			K.Struct;
 		symbols.push({
 			name: `{#${node.block_type}}`,
@@ -132,6 +133,27 @@ function collect_children_symbols(node: AstNode, text: string): DocumentSymbol[]
 			children: collect_children_symbols(node.else_branch, text),
 		});
 	}
+	// Case branches for switch blocks: nest each as a child with {#case <cond>} name
+	if (node.case_branches) {
+		for (const branch of node.case_branches) {
+			const label = branch.condition ? `{#case ${branch.condition}}` : "{#case}";
+			const branch_range = branch.children.length > 0
+				? { start: branch.children[0]!.range.start, end: branch.children[branch.children.length - 1]!.range.end }
+				: node.range;
+			symbols.push({
+				name: label,
+				kind: K.EnumMember,
+				range: {
+					start: offset_to_position(text, branch_range.start),
+					end: offset_to_position(text, branch_range.end),
+				},
+				selectionRange: {
+					start: offset_to_position(text, branch_range.start),
+					end: offset_to_position(text, branch_range.start),
+				},
+			});
+		}
+	}
 	return symbols;
 }
 
@@ -173,6 +195,27 @@ function collect_folds(node: AstNode, text: string): FoldingRange[] {
 	}
 	if (node.else_branch) {
 		folds.push(...collect_folds(node.else_branch, text));
+	}
+
+	// Case branches in switch blocks
+	if (node.case_branches) {
+		for (const branch of node.case_branches) {
+			// Fold each case branch body
+			if (branch.children.length > 0) {
+				const first = branch.children[0]!;
+				const last = branch.children[branch.children.length - 1]!;
+				const start = offset_to_position(text, first.range.start);
+				const end = offset_to_position(text, last.range.end);
+				if (start.line < end.line) {
+					folds.push({
+						startLine: start.line,
+						startCharacter: start.character,
+						endLine: end.line,
+						endCharacter: end.character,
+					});
+				}
+			}
+		}
 	}
 
 	return folds;

@@ -6,7 +6,7 @@ A lightweight rendering layer that wraps a template engine, injects shared conte
 
 ## Two-layer component architecture (clarified)
 The codebase has two distinct things both called "components," and the plan touches only the first:
-- **ReeTags** (`.ree` files whose **basename contains a hyphen**, e.g. `star-rating.ree` — in `components/`, the `routes/` tree, or mounted module roots) - server-rendered, compiled by the `.ree` engine at request time from `props.attributes`/`props.children`. The hyphen in the tag name is what marks `<tag-name>` as a component invocation: a tag is only eligible if its name contains a hyphen (the preprocessor's `cust_elem_regex` requires it), so a hyphenless file like `routes/foo.ree` is a plain template (reachable via `render()`/`{#include}`, never via `<foo>`). Any eligible tag is auto-routed to a component file - `components/<tag-name>.ree` first, then a same-named hyphenated file in the routes tree (see `internals/REE_TEMPLATES.md` "Component includes" for the full resolution order). This is what `tags` mode targets.
+- **ReeTags** (`.ree` files whose **basename contains a hyphen**, e.g. `star-rating.ree` — in `components/`, the `apps/main/` tree, or mounted module roots) - server-rendered, compiled by the `.ree` engine at request time from `props.attributes`/`props.children`. The hyphen in the tag name is what marks `<tag-name>` as a component invocation: a tag is only eligible if its name contains a hyphen (the preprocessor's `cust_elem_regex` requires it), so a hyphenless file like `apps/main/foo.ree` is a plain template (reachable via `render()`/`{#include}`, never via `<foo>`). Any eligible tag is auto-routed to a component file - `components/<tag-name>.ree` first, then a same-named hyphenated file in the routes tree (see `internals/REE_TEMPLATES.md` "Component includes" for the full resolution order). This is what `tags` mode targets.
 - **Web components** (`static/web-components/*.js`, `static/*.js`) - real browser `customElements.define(...)` elements (`date-input`, `markdown-editor`, `validation-error`, `toasts-area`, `title-display`). These render blank server-side and hydrate client-side; they are loaded via `<script src="...">` and are orthogonal to which server template produced their surrounding HTML. `<field-wrapper>` is not a registered custom element anywhere in `static/` - it's inert markup styled via `app.css`, used identically by both flat templates and ReeTag components.
 
 ---
@@ -821,7 +821,7 @@ Key points:
 
 - **Headers** (`{#with props}`): `{= columns.name.class }` resolves as `props.columns.name.class` (structural data, stays `{= }`). `{_ labels.name }` resolves against `props.translations.labels.name` regardless of the `with` scope.
 - **Cells** (`{#with record}`): `{= name }` resolves as `record.name`. The class still uses the full `{= props.columns.name.class }` path because `props` is a local variable that takes precedence over the with context.
-- **Nested child grids**: Child headers also use `{#with props}`, child rows use `{#with child}` for their cells - same pattern, different loop variable. Note `child_ui`/`child_fields` are handler-flattened plain data (from the child route's own `ctx.translations`, resolved separately), not `props.translations` - they stay `{= }`, not `{_ }`. See `internals/adr/0001-translation-lookup-tags.md`.
+- **Nested child grids**: Child headers also use `{#with props}`, child rows use `{#with child}` for their cells - same pattern, different loop variable. Note `child_ui`/`child_fields` are handler-flattened plain data (from the child route's own `ctx.translations`, resolved separately), not `props.translations` - they stay `{= }`, not `{_ }`.
 - **Generator alignment**: The `render_field_header()` function emits bare `{= columns.* }` (no `props.` prefix, structural data) and `{_ labels.* }` (translation, ignores `with` scope) - both expecting the `{#with props}` wrapper for the structural half. The `render_field_cell()` function emits bare `{= name }` field names (no `record.` prefix), expecting the `{#with record}` wrapper.
 
 ### When NOT to use `{#with}`
@@ -843,14 +843,19 @@ import { create_template_engine } from "$lib/template";
 const engine = create_template_engine(is_dev);
 ```
 
-| Option       | Dev value   | Prod value  |
-| ------------ | ----------- | ----------- |
-| `views`      | `../routes` | `../routes` |
-| `cache`      | `false`     | `true`      |
-| `ext`        | `.ree`      | `.ree`      |
-| `autoEscape` | `true`      | `true`      |
+| Option         | Dev value     | Prod value    |
+| -------------- | ------------- | ------------- |
+| `views`        | `apps/main`   | `apps/main`   |
+| `shared_views` | `platform`    | `platform`    |
+| `project_root` | repo root     | repo root     |
+| `cache`        | `false`       | `true`        |
+| `ext`          | `.ree`        | `.ree`        |
+| `autoEscape`   | `true`        | `true`        |
 
-Templates use the `.ree` extension and are resolved relative to the `routes/` directory.
+Templates use the `.ree` extension and are resolved relative to the `apps/main/`
+directory. A name with no file there and no matching mounted module falls back to
+`shared_views` (`platform/`), which is how `render("notfound")` and the auth pages
+resolve identically from all three apps.
 
 ---
 
@@ -901,7 +906,7 @@ but this is discouraged - it bypasses the missing-key marker, so a typo or an un
 renders as `""` instead of showing up as `{title}`. Reserve `{= }`/`{~ }` for everything that is not a
 translation lookup: `props.user`, `props.record`, loop variables, computed expressions.
 
-See `internals/adr/0001-translation-lookup-tags.md` for the full design rationale.
+Translation lookup remains separate from direct value rendering so template expressions do not need ambiguous prefix-matching behavior.
 
 #### Control flow
 
@@ -914,9 +919,17 @@ See `internals/adr/0001-translation-lookup-tags.md` for the full design rational
 ```
 
 ```
-{#each list as item }
-  ...
-{/each}
+{#switch value }
+  {#case 10}
+    ...
+  {#case 100}
+    ...
+  {:else}
+    ...
+{/switch}
+```
+
+`{#switch}` compares the value with each `{#case}` expression using strict equality (`===`) and renders the first matching branch; `{:else}` (optional, must be last) is the default. This covers the `{:else if}` chains the engine deliberately does not support. The switch expression and case values may be any JS expression (`props.status`, `"admin"`, etc.).
 
 {#each list as item, index }
   ...
@@ -967,7 +980,7 @@ Includes another template inline. The included template receives a merged copy o
 Any tag whose name contains **at least one hyphen** is treated as a component invocation. The pre-processor converts it internally to `{#include("<resolved include path>", {children: <compiled slot>, attributes: { "type": "red" }})}`. The include path is resolved by an index built at startup (`precompile_templates()`, self-healed lazily in dev) in this order:
 
 1. `components/<tag-name>.ree` → `$components/<tag-name>` (a shared component always shadows a same-named routes-tree file)
-2. Any `*.ree` file named `<tag-name>` in the routes tree → views-relative name (e.g. `<star-rating>` resolves `routes/examples/kitchen_sink/star-rating.ree` as `examples/kitchen_sink/star-rating`)
+2. Any `*.ree` file named `<tag-name>` in the routes tree → views-relative name (e.g. `<star-rating>` resolves `apps/main/examples/kitchen_sink/star-rating.ree` as `examples/kitchen_sink/star-rating`)
 3. Any same-named file in a mounted route-module root → `<module-code>/<name>` (views-tree files beat module files for a duplicate tag)
 
 A tag with no matching file anywhere is passed through as literal HTML (e.g. the native `<date-input>` web component). Because tag names are global, a route-local component with a duplicate basename is only resolved for templates in its own subtree if it is the first match in glob order - keep component tag names unique across the tree.
@@ -1047,7 +1060,7 @@ Just `rows` is enough to control dropdown height - `max-height` is computed as `
 
 #### `<image-upload>` component
 
-The `<image-upload>` component (`components/image-upload.ree`, `static/image-upload.js`) is a click-to-browse / drag-and-drop widget that uploads directly to `POST /system/images/save` (the same endpoint the full `/system/images/new` editor uses) and writes the returned `s3_url` into a hidden input named by the `name` attribute, so it submits with the surrounding form like any other field.
+The `<image-upload>` component (`components/image-upload.ree`, `static/image-upload.js`) is a click-to-browse / drag-and-drop widget that uploads directly to `POST /images/save` (the same endpoint the full `/images/new` editor uses) and writes the returned `s3_url` into a hidden input named by the `name` attribute, so it submits with the surrounding form like any other field. These endpoints are served by the reeman app (`apps/reeman/server.ts`).
 
 **Attributes:**
 
@@ -1065,7 +1078,7 @@ The `<image-upload>` component (`components/image-upload.ree`, `static/image-upl
 <image-upload name="portrait_image" value="{= record.portrait_image }" folder="members" label="{_ labels.portrait_image }" module="admin"></image-upload>
 ```
 
-**Upload authorization:** `POST /system/images/save` always requires an authenticated session (`require_auth`). When `module` is set, the component also sends it as a form field, and the server additionally checks `require_module(auth_ctx, module)` - the request is rejected with `403 Forbidden` if the current user lacks that module. Leaving `module` unset means any authenticated user can upload; it does not bypass auth entirely. The page embedding `<image-upload>` should itself be gated (e.g. via `module` on its `RouteDefinition`, see [routes/AGENTS.md](../routes/AGENTS.md)) - the component only protects the upload action, not page visibility.
+**Upload authorization:** `POST /images/save` always requires an authenticated session (`require_auth`). When `module` is set, the component also sends it as a form field, and the server additionally checks `require_module(auth_ctx, module)` - the request is rejected with `403 Forbidden` if the current user lacks that module. Leaving `module` unset means any authenticated user can upload; it does not bypass auth entirely. The page embedding `<image-upload>` should itself be gated (e.g. via `module` on its `RouteDefinition`, see [routes/AGENTS.md](../apps/main/AGENTS.md)) - the component only protects the upload action, not page visibility.
 
 **Generator integration:** a column whose name ends in `_image` is auto-detected as `field.type === "image"` (see `IMAGE_SUFFIXES` in `config/db_structure.ts`) and gets:
 - A form field rendered via `<image-upload>` (`generator/templates/fields/image.ree`).
@@ -1134,7 +1147,6 @@ Includes and layouts support several path styles:
 | Prefix         | Resolves from                    | Example                         |
 | -------------- | -------------------------------- | ------------------------------- |
 | `$components/` | Project root `components/`       | `$components/button`            |
-| `$routes/`     | Project root `routes/`           | `$routes/home/hero`             |
 | `$lib/`        | Project root `lib/`              | `$lib/flash`                    |
 | `./` or `../`  | Relative to the current template | `./sidebar`, `../shared/footer` |
 | `/name`        | Views root (absolute)            | `/layouts/base`                 |
@@ -1162,9 +1174,8 @@ await engine.writeOutput("dist/index.html", html);
 
 **Precompiling at startup (`$lib/template/precompile.ts`):** call
 `await precompile_templates(engine)` once on cold start. In prod it globs
-`routes/`, mounted route-module roots, and `components/` for `*.ree`, compiles
-each file once, and caches by template name and file path — `render()` and
-`{#include("$routes/…")}`/ReeTag includes then hit memory instead of disk per
+`apps/main/`, mounted route-module roots, and `components/` for `*.ree`, compiles
+each file once, and caches by template name and file path — `render()`, alias includes (`$components/…`), and ReeTag includes then hit memory instead of disk per
 request (no per-render file read, no per-include recompile). It also builds the
 component index (tag → include path) that powers ReeTag resolution from
 `components/`, the routes tree, and module roots — see "Component includes"
@@ -1307,17 +1318,20 @@ data: {
 
 ---
 
-## Global Template Variables (`server.ts`)
+## Global Template Variables (`lib/bootstrap.ts`)
 
-`base_data` in `server.ts` is passed to `initialize_render()` and merged into **every** template render automatically. No need to pass these values per-route.
+`base_data` in `lib/bootstrap.ts` is passed to `initialize_render()` and merged into **every** template render automatically. No need to pass these values per-route.
 
 | Variable                   | Type / Value                           | Description                                         |
 | -------------------------- | -------------------------------------- | --------------------------------------------------- |
 | `site_name`                | `string` - `"reepolee App v<version>"` | App name with version from `package.json`           |
 | `year`                     | `number` - current year                | Useful for copyright footers                        |
 | `is_dev`                   | `boolean`                              | `true` when server started with `--dev`             |
-| `url(p)`                   | `(p: string) => string`                | Ensures a path starts with `/`; use in `href` attrs |
-| `menu_entries_crud_routes` | `CrudRoute[]`                          | CRUD routes flagged with `is_menu_entry: true`      |
+| `app_name`                 | `"main" \| "reeman" \| "reeqa"`     | Current application identity                         |
+| `version`                  | `string`                               | Package version in production, short timestamp in dev |
+| `dev_apps`                 | `Dev_app_link[]`                       | Local application links in development only          |
+| `nav_groups`               | `NavRouteGroup[]`                      | Navigation groups built from registered routes        |
+| `busy_poller`              | `boolean`                              | Enables busy-state polling for ReeQA                  |
 
 These merge with any per-render `data` argument. Per-render data takes precedence over `base_data`.
 
@@ -1326,13 +1340,9 @@ These merge with any per-render `data` argument. Per-render data takes precedenc
 ```html
 <footer>© {= year } {= site_name }</footer>
 
-<a href="{= url('dashboard') }">Dashboard</a>
-
 {#if is_dev }
 <div class="dev-banner">Development mode</div>
-{/if} {#each menu_entries_crud_routes as entry }
-<a href="{= entry.path }">{= entry.label }</a>
-{/each}
+{/if}
 ```
 
 ---

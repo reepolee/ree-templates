@@ -97,10 +97,17 @@ const BLOCK_SNIPPETS: SnippetDef[] = [
 		kind: K.Snippet,
 	},
 	{
+		label: "{#switch}",
+		detail: "Block: switch statement",
+		insertText: "{#switch ${1:expr}}\n\t{#case ${2:value}}\n\t\t$0\n\t{:else}\n\t\t\n{/switch}",
+		docs: "Switch block. Compares against {#case} branches using strict equality. {:else} is the default.",
+		kind: K.Snippet,
+	},
+	{
 		label: "{:else}",
 		detail: "Block: else branch",
 		insertText: "{:else}",
-		docs: "Else branch for {#if} or {#each}.",
+		docs: "Else branch for {#if}, {#each}, or {#switch}.",
 		kind: K.Snippet,
 	},
 ];

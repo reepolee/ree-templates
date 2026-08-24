@@ -122,6 +122,37 @@ describe("Parser", () => {
 			expect(blocks[0]!.block_type).toBe("if");
 			expect(blocks[1]!.block_type).toBe("each");
 		});
+
+		test("switch block", () => {
+			const doc = parse_src("{#switch props.status }{#case 10 }<p>ten</p>{:else}<p>other</p>{/switch}");
+			const blocks = find_nodes(doc, "block");
+			expect(blocks.length).toBeGreaterThanOrEqual(1);
+			const sw = blocks.find(b => b.block_type === "switch")!;
+			expect(sw).toBeDefined();
+			expect(sw!.case_branches).toBeDefined();
+			expect(sw!.case_branches!.length).toBe(1);
+			expect(sw!.case_branches![0]!.condition).toBe("10");
+			expect(sw!.else_branch).toBeDefined();
+		});
+
+		test("switch block with multiple cases", () => {
+			const doc = parse_src("{#switch x }{#case 1 }one{#case 2 }two{/switch}");
+			const blocks = find_nodes(doc, "block");
+			const sw = blocks.find(b => b.block_type === "switch")!;
+			expect(sw).toBeDefined();
+			expect(sw!.case_branches!.length).toBe(2);
+			expect(sw!.case_branches![0]!.condition).toBe("1");
+			expect(sw!.case_branches![1]!.condition).toBe("2");
+		});
+
+		test("switch block with expression case", () => {
+			const doc = parse_src("{#switch role }{#case 'admin' }Admin{#case 'user' }User{/switch}");
+			const blocks = find_nodes(doc, "block");
+			const sw = blocks.find(b => b.block_type === "switch")!;
+			expect(sw).toBeDefined();
+			expect(sw!.case_branches!.length).toBe(2);
+			expect(sw!.case_branches![0]!.condition).toBe("'admin'");
+		});
 	});
 
 	describe("components", () => {

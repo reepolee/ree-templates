@@ -49,8 +49,8 @@ export type TokenType =
 export interface Token {
 	type: TokenType;
 	range: SourceRange;
-	/** For block_open: "if" | "each" | "with" */
-	block_type?: "if" | "each" | "with";
+	/** For block_open: "if" | "each" | "with" | "switch" | "case" */
+	block_type?: "if" | "each" | "with" | "switch" | "case";
 	/** For output/translation: "=" | "~" | "_" | "-" | "@" */
 	prefix?: string;
 	/** Tag name for tag_open/tag_close/component_open/component_close */
@@ -102,10 +102,12 @@ export interface AstNode {
 	attributes?: string;
 	/** For elements and components: whether self-closing */
 	self_closing?: boolean;
-	/** For block nodes: "if" | "each" | "with" */
-	block_type?: "if" | "each" | "with";
+	/** For block nodes: "if" | "each" | "with" | "switch" | "case" */
+	block_type?: "if" | "each" | "with" | "switch" | "case";
 	/** For block nodes: else branch (if present) */
 	else_branch?: AstNode;
+	/** For switch blocks: case branches with their conditions */
+	case_branches?: { condition: string; children: AstNode[] }[];
 	/** For output/translation: the prefix character */
 	prefix?: string;
 	/** For output: the JS expression */

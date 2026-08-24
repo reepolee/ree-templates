@@ -43,7 +43,9 @@ const DIRECTIVE_DOCS: Record<string, string> = {
 	"{- }": "**Raw translation** - Unescaped translation. Use for trusted markup.",
 	"{@ }": "**Markdown translation** - Translation rendered through markdown to HTML.",
 	"{{ }}": "**Raw JavaScript** - Arbitrary JS code block.",
-	"{:else}": "**Else branch** for `{#if}` or `{#each}` blocks.",
+	"{#switch}": "**Switch block**\n\nCompares a value against multiple `{#case}` branches using strict equality (`===`). The first matching branch renders; `{:else}` is the default.\n\n```ree\n{#switch props.status}\n  {#case \"active\"}\n    <span>Active</span>\n  {#case \"pending\"}\n    <span>Pending</span>\n  {:else}\n    <span>Unknown</span>\n{/switch}\n```",
+	"{#case}": "**Case branch** inside a `{#switch}` block. Renders when its expression matches the switch value using strict equality (`===`).",
+	"{:else}": "**Else branch** for `{#if}`, `{#each}`, or `{#switch}` blocks.",
 };
 
 const HELPER_DOCS: Record<string, string> = {
@@ -101,6 +103,8 @@ function hover_for_token(token: import("../parser/ast").Token, profile?: ReeProj
 			if (token.block_type === "if") return DIRECTIVE_DOCS["{#if}"];
 			if (token.block_type === "each") return DIRECTIVE_DOCS["{#each}"];
 			if (token.block_type === "with") return DIRECTIVE_DOCS["{#with}"];
+			if (token.block_type === "switch") return DIRECTIVE_DOCS["{#switch}"];
+			if (token.block_type === "case") return DIRECTIVE_DOCS["{#case}"];
 			break;
 		case "block_else":
 			return DIRECTIVE_DOCS["{:else}"];

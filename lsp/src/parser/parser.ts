@@ -161,13 +161,17 @@ function parse_statement(s: ParseState): AstNode | null {
 }
 
 // ---------------------------------------------------------------------------
-// Block structures: {#if}...{:else}...{/if}, {#each}, {#with}
+// Block structures: {#if}...{:else}...{/if}, {#each}, {#with}, {#switch}
 // ---------------------------------------------------------------------------
 
 function parse_block_structure(s: ParseState): AstNode {
 	const open = advance(s)!;
 	const block_type = open.block_type!;
 	const start_range = open.range;
+
+	if (block_type === "switch") {
+		return parse_switch_block(s, start_range);
+	}
 
 	const children: AstNode[] = [];
 	let else_branch: AstNode | undefined;
@@ -214,6 +218,78 @@ function parse_block_structure(s: ParseState): AstNode {
 
 	return container("block", range_span(start_range, end_range), children, {
 		block_type,
+		else_branch,
+		recovery: !close_range,
+	});
+}
+
+/**
+ * Parse a {#switch} ... {#case} ... {:else} ... {/switch} block.
+ */
+function parse_switch_block(s: ParseState, start_range: SourceRange): AstNode {
+	const case_branches: { condition: string; children: AstNode[] }[] = [];
+	let else_branch: AstNode | undefined;
+	let close_range: SourceRange | undefined;
+
+	/** Are we at a boundary that ends the current case body? */
+	function at_case_boundary(): boolean {
+		if (at_end(s)) return true;
+		const pk = peek(s)!;
+		if (pk.type === "block_close" && pk.block_type === "switch") return true;
+		if (pk.type === "block_else") return true;
+		if (pk.type === "block_open" && pk.block_type === "case") return true;
+		return false;
+	}
+
+	while (!at_end(s)) {
+		const t = peek(s)!;
+
+		if (t.type === "block_open" && t.block_type === "case") {
+			const case_token = advance(s)!;
+			const condition = case_token.expression ?? "";
+			const case_children = parse_block(s, at_case_boundary);
+			case_branches.push({ condition, children: case_children });
+			continue;
+		}
+
+		if (t.type === "block_else") {
+			advance(s);
+			const else_children = parse_block(s, at_case_boundary);
+			if (else_children.length > 0) {
+				else_branch = container("block", { start: t.range.start, end: else_children[else_children.length - 1]!.range.end }, else_children, { block_type: "switch", recovery: false });
+			}
+			continue;
+		}
+
+		if (t.type === "block_close" && t.block_type === "switch") {
+			advance(s);
+			close_range = t.range;
+			break;
+		}
+
+		if (t.type === "block_close" && t.block_type !== "switch") {
+			s.errors.push({ range: t.range, message: `Mismatched closing block: expected {/switch}, got {/${t.block_type}}` });
+			advance(s);
+			close_range = t.range;
+			break;
+		}
+
+		// Unexpected token outside any case branch: skip it
+		const node = parse_statement(s);
+		if (node) {
+			s.errors.push({ range: node.range, message: "Content outside {#case} branch in switch block" });
+		}
+	}
+
+	if (!close_range) {
+		s.errors.push({ range: start_range, message: "Unclosed {#switch} block" });
+	}
+
+	const end_range = close_range ?? start_range;
+
+	return container("block", range_span(start_range, end_range), [], {
+		block_type: "switch",
+		case_branches,
 		else_branch,
 		recovery: !close_range,
 	});

@@ -75,3 +75,29 @@ test('folds REE blocks alongside their HTML children', () => {
 	assert.ok(ranges.some(range => range.startLine === 0 && range.endLine === 4));
 	assert.ok(ranges.some(range => range.startLine === 1 && range.endLine === 3));
 });
+
+test('folds REE switch blocks and their case branches', () => {
+	const source = [
+		'{#switch props.status}',
+		'\t{#case 10}',
+		'\t\t<p>ten</p>',
+		'\t\t<span>more</span>',
+		'\t{#case 100}',
+		'\t\t<p>hundred</p>',
+		'\t\t<span>more</span>',
+		'\t{:else}',
+		'\t\t<p>other</p>',
+		'\t\t<span>more</span>',
+		'{/switch}',
+	].join('\n');
+
+	const ranges = compute_folding_ranges(source);
+	// The switch block itself folds from line 0 to line 10.
+	assert.ok(ranges.some(range => range.startLine === 0 && range.endLine === 10), 'switch block should fold');
+	// Each case branch body folds from after its {#case} line to before the
+	// next boundary, including leading/trailing whitespace text nodes.
+	assert.ok(ranges.some(range => range.startLine === 1 && range.endLine === 4), 'first case body should fold');
+	assert.ok(ranges.some(range => range.startLine === 4 && range.endLine === 7), 'second case body should fold');
+	// The {:else} body folds from the else line to before {/switch}.
+	assert.ok(ranges.some(range => range.startLine === 7 && range.endLine === 10), 'else body should fold');
+});

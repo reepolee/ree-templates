@@ -148,6 +148,32 @@ describe("Scanner", () => {
 			expect(tokens[0]!.block_type).toBe("with");
 		});
 
+		test("{#switch}", () => {
+			const { tokens } = scan_src("{#switch props.status }");
+			expect(tokens[0]!.type).toBe("block_open");
+			expect(tokens[0]!.block_type).toBe("switch");
+		});
+
+		test("{#case}", () => {
+			const { tokens } = scan_src("{#case 10 }");
+			expect(tokens[0]!.type).toBe("block_open");
+			expect(tokens[0]!.block_type).toBe("case");
+			expect(tokens[0]!.expression).toBe("10");
+		});
+
+		test("{#case with expression}", () => {
+			const { tokens } = scan_src("{#case props.status }");
+			expect(tokens[0]!.type).toBe("block_open");
+			expect(tokens[0]!.block_type).toBe("case");
+			expect(tokens[0]!.expression).toBe("props.status");
+		});
+
+		test("{/switch}", () => {
+			const { tokens } = scan_src("{/switch}");
+			expect(tokens[0]!.type).toBe("block_close");
+			expect(tokens[0]!.block_type).toBe("switch");
+		});
+
 		test("{:else}", () => {
 			const { tokens } = scan_src("{:else}");
 			expect(tokens[0]!.type).toBe("block_else");
