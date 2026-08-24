@@ -2,9 +2,7 @@
  * Document symbols and folding range providers for .ree templates.
  *
  * Symbols: Ree blocks ({#if}, {#each}, {#with}), components, includes, layouts.
- * Folding: Ree blocks, script/style bodies, comments.
- *
- * HTML symbols/folding are out of scope for v1.
+ * Folding: Ree blocks, HTML/REE elements, script/style bodies, comments.
  */
 
 import type { DocumentSymbol, FoldingRange, SymbolKind } from "vscode-languageserver";
@@ -150,7 +148,8 @@ export function compute_folding_ranges(text: string): FoldingRange[] {
 function collect_folds(node: AstNode, text: string): FoldingRange[] {
 	const folds: FoldingRange[] = [];
 
-	// Foldable: blocks, script/style bodies, components, elements
+	// Foldable containers include both native HTML and hyphenated REE
+	// components. The parser gives both the complete opening-to-closing range.
 	const is_foldable = node.type === "block" || node.type === "element" || node.type === "component" || node.type === "script" || node.type === "style";
 
 	if (is_foldable && node.range.start < node.range.end) {
