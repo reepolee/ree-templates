@@ -104,8 +104,10 @@ function substitute_bare_references(
 
 	const names = Array.from(substitutions.keys());
 	const skipped_ranges = [...find_nested_with_ranges(body), ...find_each_binding_ranges(body, names)];
-	const tag_re = /\{([=~])\s*([\s\S]*?)\}/g;
 	const rewrites: Array<{ start: number; end: number; text: string; flagged: boolean }> = [];
+
+	// ---- {= expr } / {~ expr } tags ----
+	const tag_re = /\{([=~])\s*([\s\S]*?)\}/g;
 	let match: RegExpExecArray | null;
 
 	while ((match = tag_re.exec(body)) !== null) {
@@ -113,7 +115,6 @@ function substitute_bare_references(
 		if (is_within_ranges(tag_start, skipped_ranges)) continue;
 
 		const expression = match[2];
-		const expression_start = tag_start + match[0].indexOf(expression);
 		const substituted = substitute_expression(expression, substitutions, names);
 		if (!substituted) continue;
 
@@ -131,19 +132,87 @@ function substitute_bare_references(
 		});
 	}
 
-	let result = body;
-	for (let i = rewrites.length - 1; i >= 0; i--) {
-		const rewrite = rewrites[i];
-		result = result.slice(0, rewrite.start) + rewrite.text + result.slice(rewrite.end);
-		if (!rewrite.flagged) continue;
+	// ---- Block directive expressions ({#switch expr}, {#if expr}, …) ----
+	// These also reference `props.attributes` names inside a {#with} block
+	// — e.g. `{#switch type}` where `type` was passed by the call site.
+	const directive_re = /\{#(switch|if|with|each|case)\s+[^}]*\}/g;
+	let d_match: RegExpExecArray | null;
 
-		const line_end = end_of_line_at(result, rewrite.start);
-		const line_start = start_of_line_at(result, rewrite.start);
+	while ((d_match = directive_re.exec(body)) !== null) {
+		if (is_within_ranges(d_match.index, skipped_ranges)) continue;
+
+		const kind = d_match[1];
+		const raw = d_match[0];
+		// Inner text between the opening `{#kind ` and the closing `}`.
+		const inner = raw.slice(kind.length + 3, -1).trim();
+
+		// For {#each}, only the expression before `as` refers to outside data;
+		// the bindings after `as` are local variables and must not be touched.
+		const expr_part = kind === 'each' ? extract_each_expression(inner) : inner;
+
+		const substituted = substitute_expression(expr_part, substitutions, names);
+		if (!substituted || !substituted.replaced_all) continue;
+
+		// Block directive expressions are JS expression positions (like
+		// {= } bodies), so use the expression_value variant, not the
+		// raw text form that may still contain {= } wrappers.
+		let new_expr = substituted.expression;
+
+		// Reconstruct the full directive with the substituted expression.
+		let new_directive: string;
+		if (kind === 'each') {
+			const as_part = inner.slice(inner.indexOf(expr_part) + expr_part.length);
+			new_directive = `{#each ${new_expr}${as_part} }`;
+		} else {
+			new_directive = `{#${kind} ${new_expr} }`;
+		}
+
+		rewrites.push({
+			start: d_match.index,
+			end: d_match.index + raw.length,
+			text: new_directive,
+			flagged: false,
+		});
+	}
+
+	// Apply rewrites in source order by building the result left-to-right,
+	// which avoids offset shifts from overlapping replacements.  Flagged
+	// partial-splice markers are applied in a second pass using the
+	// computed result positions so the line offsets stay valid.
+	rewrites.sort((a, b) => a.start - b.start);
+
+	let result = '';
+	let cursor = 0;
+	const flagged_result_positions: number[] = [];
+	for (const rewrite of rewrites) {
+		result += body.slice(cursor, rewrite.start) + rewrite.text;
+		if (rewrite.flagged) {
+			flagged_result_positions.push(result.length - rewrite.text.length);
+		}
+		cursor = rewrite.end;
+	}
+	result += body.slice(cursor);
+
+	for (let i = flagged_result_positions.length - 1; i >= 0; i--) {
+		const pos = flagged_result_positions[i];
+		const line_end = end_of_line_at(result, pos);
+		const line_start = start_of_line_at(result, pos);
 		const line = result.slice(line_start, line_end);
 		result = result.slice(0, line_start) + mark_partial_splice(line) + result.slice(line_end);
 	}
 
 	return result;
+}
+
+/**
+ * For a `{#each}` inner text like `items as item, index`, return only the
+ * expression before `as` ("items"). Everything after (and including) `as`
+ * is a binding declaration and must not be substituted.
+ */
+function extract_each_expression(inner: string): string {
+	const as_at = inner.search(/\bas\b/);
+	if (as_at === -1) return inner;
+	return inner.slice(0, as_at).trim();
 }
 
 // Identifiers, dotted paths and quoted strings. Matching paths and strings as

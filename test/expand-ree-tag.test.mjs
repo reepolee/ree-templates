@@ -301,3 +301,58 @@ test('expands a component mixing bare and dotted references', () => {
 
 	assert.equal(inlined, `<h2>Hi</h2>\n<p>Hi</p>`);
 });
+
+test('expands bare references inside {#switch} and {#case} directives', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t{#switch status}',
+		'\t\t{#case active_status}',
+		'\t\t\t<span>{= label }</span>',
+		'\t\t{:else}',
+		'\t\t\t<span>Off</span>',
+		'\t{/switch}',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<status-pill status="pending" active_status="pending" label="Pending"></status-pill>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.match(inlined, /\{#switch 'pending' \}/);
+	assert.match(inlined, /\{#case 'pending' \}/);
+	assert.match(inlined, /<span>Pending<\/span>/);
+});
+
+test('expands bare references inside {#if} directives', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t{#if is_admin}',
+		'\t\t<span>Admin</span>',
+		'\t{/if}',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<role-guard is_admin={= true }></role-guard>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	assert.match(inlined, /\{#if true \}/);
+	assert.match(inlined, /<span>Admin<\/span>/);
+});
+
+test('expands bare references inside {#if} directives with plain string values', () => {
+	const component_source = [
+		'{#with props.attributes}',
+		'\t{#if show_header}',
+		'\t\t<header>Yes</header>',
+		'\t{/if}',
+		'{/with}',
+	].join('\n');
+	const tag = find_ree_tag_at(`<section-card show_header="yes"></section-card>`, 0);
+
+	assert.ok(tag);
+	const inlined = inline_component(component_source, tag);
+
+	// Plain string values become JS string literals in directive expressions.
+	assert.match(inlined, /\{#if 'yes' \}/);
+});
