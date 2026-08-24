@@ -16,7 +16,7 @@
  * | Translation diag.    | i18n/diagnostics.ts     | LSP       |
  * | Code actions         | i18n/diagnostics.ts     | LSP       |
  * | Rename               | i18n/rename.ts          | LSP       |
- * | Symbols / folding    | N/A (new)               | LSP       |
+ * | Symbols              | N/A (new)               | LSP       |
  * |----------------------|-------------------------|-----------|
  * | Inline decorations   | i18n/inline.ts          | CLIENT    |
  * | Status bar           | i18n/statusBar.ts       | CLIENT    |

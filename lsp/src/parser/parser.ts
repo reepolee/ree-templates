@@ -242,10 +242,12 @@ function parse_html_element(s: ParseState): AstNode {
 		}
 
 		if (t.type === "tag_close") {
-			// Mismatched close
-			s.errors.push({ range: t.range, message: `Mismatched closing tag: expected </${tag_name}>, got </${t.tag_name}>` });
-			advance(s);
-			return container("element", range_span(open.range, t.range), children, { tag_name, attributes: open.attributes, recovery: true });
+			// A closing tag for an ancestor belongs to the ancestor, not this
+			// element. Leave it for the enclosing parser so malformed nesting does
+			// not swallow the remainder of the document.
+			if (t.tag_name !== tag_name) {
+				return container("element", open.range, children, { tag_name, attributes: open.attributes, recovery: true });
+			}
 		}
 
 		const node = parse_statement(s);
@@ -280,9 +282,10 @@ function parse_component(s: ParseState): AstNode {
 		}
 
 		if (t.type === "component_close") {
-			s.errors.push({ range: t.range, message: `Mismatched closing component: expected </${tag_name}>, got </${t.tag_name}>` });
-			advance(s);
-			return container("component", range_span(open.range, t.range), children, { tag_name, attributes: open.attributes, recovery: true });
+			// Leave ancestor component closers for the enclosing parser.
+			if (t.tag_name !== tag_name) {
+				return container("component", open.range, children, { tag_name, attributes: open.attributes, recovery: true });
+			}
 		}
 
 		const node = parse_statement(s);

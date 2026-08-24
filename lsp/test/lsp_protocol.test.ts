@@ -275,7 +275,7 @@ describe("ree-lsp protocol smoke test", () => {
 		expect(caps.hoverProvider).toBe(true);
 		expect(caps.definitionProvider).toBe(true);
 		expect(caps.documentSymbolProvider).toBe(true);
-		expect(caps.foldingRangeProvider).toBe(true);
+		expect(caps.foldingRangeProvider).toBeUndefined();
 		expect(caps.documentFormattingProvider).toBe(true);
 
 		send_message({ jsonrpc: "2.0", id: next_id(), method: "shutdown", params: null });

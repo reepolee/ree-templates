@@ -43,6 +43,25 @@ test('folds multiline native HTML and REE component elements through their closi
 	]);
 });
 
+test('keeps nested sibling and ancestor tags available for folding', () => {
+	const source = [
+		'<body>',
+		'\t<aside>',
+		'\t\t<nav-item>Navigation</nav-item>',
+		'\t</aside>',
+		'\t<main>',
+		'\t\t<content-card>Content</content-card>',
+		'\t</main>',
+		'</body>',
+	].join('\n');
+
+	const ranges = compute_folding_ranges(source);
+	assert.equal(ranges.length, 3);
+	assert.ok(ranges.some(range => range.startLine === 0 && range.endLine === 7));
+	assert.ok(ranges.some(range => range.startLine === 1 && range.endLine === 3));
+	assert.ok(ranges.some(range => range.startLine === 4 && range.endLine === 6));
+});
+
 test('folds REE blocks alongside their HTML children', () => {
 	const source = [
 		'{#if props.show}',

@@ -13,7 +13,6 @@
  * - hover
  * - definition
  * - documentSymbol
- * - foldingRange
  * - documentFormatting
  */
 
@@ -92,7 +91,6 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
 			hoverProvider: true,
 			definitionProvider: true,
 			documentSymbolProvider: true,
-			foldingRangeProvider: true,
 			documentFormattingProvider: true,
 		},
 		serverInfo: {
