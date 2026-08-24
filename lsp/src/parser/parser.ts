@@ -274,11 +274,11 @@ function parse_switch_block(s: ParseState, start_range: SourceRange): AstNode {
 			break;
 		}
 
-		// Unexpected token outside any case branch: skip it
-		const node = parse_statement(s);
-		if (node) {
-			s.errors.push({ range: node.range, message: "Content outside {#case} branch in switch block" });
-		}
+		// Tokens outside any case branch ({#switch} ... first {#case}):
+		// skip them silently. Whitespace between switch and first case is
+		// normal. Other content here is author error but the LSP
+		// shouldn't noise about it — the runtime handles malformed input.
+		parse_statement(s);
 	}
 
 	if (!close_range) {
