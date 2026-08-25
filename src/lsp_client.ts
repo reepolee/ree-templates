@@ -201,3 +201,23 @@ export function deactivate_client(): Thenable<void> | undefined {
 	if (!client) return undefined;
 	return client.stop();
 }
+
+// ---------------------------------------------------------------------------
+// Custom LSP requests (used by client-side providers)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch translations for a document via the LSP, which uses the project
+ * profile to resolve locale files through the route shadow chain.
+ * Returns locale → key → value, or null when the server is unavailable.
+ */
+export async function get_translations_via_lsp(document_uri: string): Promise<Record<string, Record<string, string>> | null> {
+	if (!client || client.state !== 2 /* Running */) return null;
+	try {
+		return await client.sendRequest("ree/getTranslations", {
+			textDocument: { uri: document_uri },
+		});
+	} catch {
+		return null;
+	}
+}

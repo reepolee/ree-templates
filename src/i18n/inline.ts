@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { get_translations_via_lsp } from '../lsp_client';
 import { loadTranslations } from './loader';
 import { get_default_locale } from './settings';
 
@@ -12,6 +13,10 @@ const TRANSLATION_TAG_RE = /\{[_@-]\s+([\w.]+)\s*\}/g;
  * as ghost text after translation tags.
  *
  * Works like i18n ally - you see `{_ hero.title } → Welcome` in the editor.
+ *
+ * Uses the LSP's profile-aware translation resolver when available
+ * (which handles route-shadowed locale chains), falling back to the
+ * local co-located loader for editors that predate the LSP connection.
  */
 export function createInlineDecorations(): vscode.Disposable & { refresh: () => void } {
 	const decorationType = vscode.window.createTextEditorDecorationType({
@@ -25,14 +30,20 @@ export function createInlineDecorations(): vscode.Disposable & { refresh: () => 
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
-	function update() {
+	async function update() {
 		const default_locale = get_default_locale();
 
 		for (const editor of vscode.window.visibleTextEditors) {
 			if (editor.document.languageId !== 'ree') continue;
 
 			const text = editor.document.getText();
-			const translations = loadTranslations(editor.document.fileName);
+
+			// Try the LSP first (handles route-shadowed locale chains),
+			// fall back to the local co-located loader.
+			const translations =
+				(await get_translations_via_lsp(editor.document.uri.toString())) ??
+				loadTranslations(editor.document.fileName);
+
 			if (!translations) {
 				editor.setDecorations(decorationType, []);
 				continue;

@@ -24,7 +24,7 @@ import {
 	type InitializeResult,
 } from "vscode-languageserver/node";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
+import { basename, dirname } from "node:path";
 
 import { DocumentStore } from "./documents/document_store";
 import { compute_diagnostics } from "./features/diagnostics";
@@ -239,6 +239,36 @@ connection.onDocumentFormatting(async (params) => {
 	}
 
 	return result.edit ? [result.edit] : [];
+});
+
+// ---------------------------------------------------------------------------
+// Custom: get translations for inline decorations
+// ---------------------------------------------------------------------------
+
+connection.onRequest("ree/getTranslations", async (params: { textDocument: { uri: string } }) => {
+	try {
+		const document_file = fileURLToPath(params.textDocument.uri);
+		const project_profile = await profile_for_document(params.textDocument.uri);
+		if (!project_profile?.translation_definition_files) return null;
+
+		const locale_files = project_profile.translation_definition_files(document_file);
+		const result: Record<string, Record<string, string>> = {};
+
+		for (const full_path of locale_files) {
+			const locale = basename(full_path, ".json");
+			if (result[locale]) continue; // first file wins (most specific)
+
+			const index = project_profile.load_translation_index?.(full_path, document_file);
+			if (index && index.size > 0) {
+				result[locale] = Object.fromEntries(index);
+			}
+		}
+
+		return result;
+	} catch (err: any) {
+		console.error(`ree-lsp getTranslations error: ${err.message ?? err}`);
+		return null;
+	}
 });
 
 // ---------------------------------------------------------------------------
