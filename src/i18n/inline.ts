@@ -49,8 +49,22 @@ export function createInlineDecorations(): vscode.Disposable & { refresh: () => 
 				continue;
 			}
 
-			// Use the configured locale, fall back to first available
-			const display_data = translations[default_locale] ?? Object.values(translations)[0];
+			// Use the configured locale, fall back to first available.
+			// Locale keys from files are lowercase (en-us) but the VS Code
+			// setting uses proper BCP 47 casing (en-US); normalize both.
+			const target = default_locale.toLowerCase();
+			let display_data = translations[default_locale];
+			if (!display_data) {
+				for (const [key, value] of Object.entries(translations)) {
+					if (key.toLowerCase() === target) {
+						display_data = value;
+						break;
+					}
+				}
+			}
+			if (!display_data) {
+				display_data = Object.values(translations)[0];
+			}
 			if (!display_data) {
 				editor.setDecorations(decorationType, []);
 				continue;

@@ -15,58 +15,75 @@ interface CacheEntry {
 	mtimeMs: number;
 }
 
-/**
- * Cache keyed by directory path.
- * Each entry holds flattened translations for all locales found in that dir.
- */
+/** Cache keyed by the ordered ancestor chain (root first, template dir last). */
 const cache = new Map<string, CacheEntry>();
 
-export function getCached(dir: string): TranslationCache | null {
-	const entry = cache.get(dir);
-	if (!entry) return null;
+function chain_key(chain: string[]): string {
+	return chain.join('\x00');
+}
 
-	// Re-validate by checking if any translation file in the dir has changed
-	const dirExists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
-	if (!dirExists) {
-		cache.delete(dir);
-		return null;
-	}
-
+function latest_mtime_in(dirs: string[]): number {
 	try {
-		const files = fs.readdirSync(dir).filter(is_locale_file);
-
-		for (const file of files) {
-			const stat = fs.statSync(path.join(dir, file));
-			if (stat.mtimeMs > entry.mtimeMs) {
-				// Stale entry
-				cache.delete(dir);
-				return null;
+		let max = 0;
+		for (const localeDir of dirs) {
+			if (!fs.existsSync(localeDir)) continue;
+			const files = fs.readdirSync(localeDir).filter(is_locale_file);
+			for (const file of files) {
+				const mtime = fs.statSync(path.join(localeDir, file)).mtimeMs;
+				if (mtime > max) max = mtime;
 			}
 		}
+		return max;
 	} catch {
-		cache.delete(dir);
+		return Date.now();
+	}
+}
+
+export function getCached(chain: string[]): TranslationCache | null {
+	const key = chain_key(chain);
+	const entry = cache.get(key);
+	if (!entry) return null;
+
+	// Build the same directory list the loader would scan: each ancestor's
+	// directory and its `locales/` subfolder.
+	const dirs: string[] = [];
+	for (const anc of chain) {
+		const nested = path.join(anc, 'locales');
+		if (fs.existsSync(nested) && fs.statSync(nested).isDirectory()) {
+			dirs.push(nested);
+		} else {
+			dirs.push(anc);
+		}
+	}
+
+	const mtime = latest_mtime_in(dirs);
+	if (mtime > entry.mtimeMs) {
+		cache.delete(key);
 		return null;
 	}
 
 	return entry.data;
 }
 
-export function setCached(dir: string, data: TranslationCache): void {
-	try {
-		const files = fs.readdirSync(dir).filter(is_locale_file);
-		const mtimeMs = Math.max(
-			0,
-			...files.map(f => fs.statSync(path.join(dir, f)).mtimeMs)
-		);
-		cache.set(dir, { data, mtimeMs });
-	} catch {
-		cache.set(dir, { data, mtimeMs: Date.now() });
+export function setCached(chain: string[], data: TranslationCache): void {
+	const dirs: string[] = [];
+	for (const anc of chain) {
+		const nested = path.join(anc, 'locales');
+		if (fs.existsSync(nested) && fs.statSync(nested).isDirectory()) {
+			dirs.push(nested);
+		} else {
+			dirs.push(anc);
+		}
 	}
+	const mtimeMs = latest_mtime_in(dirs);
+	cache.set(chain_key(chain), { data, mtimeMs });
 }
 
 export function clearCache(dir?: string): void {
 	if (dir) {
-		cache.delete(dir);
+		for (const [key, _] of cache) {
+			if (key.includes(dir)) cache.delete(key);
+		}
 	} else {
 		cache.clear();
 	}

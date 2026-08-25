@@ -177,7 +177,7 @@ export function create_lsp_client(context: vscode.ExtensionContext): LanguageCli
 	return lsp_client;
 }
 
-export function start_client(client: LanguageClient, context: vscode.ExtensionContext): void {
+export function start_client(client: LanguageClient, context: vscode.ExtensionContext): Promise<void> {
 	const server_config = get_server_config(context);
 	log(`Starting LSP: command=${server_config.command}, cwd=${server_config.cwd || "(none)"}`);
 	context.subscriptions.push(client);
@@ -191,6 +191,7 @@ export function start_client(client: LanguageClient, context: vscode.ExtensionCo
 			`ree Language Server failed to start. Make sure Bun is installed or check the ree.server settings. Error: ${err}`,
 		);
 	});
+	return start_promise;
 }
 
 export function show_fallback_channel(): void {

@@ -113,11 +113,19 @@ function run_formatter(cmd: string, cwd: string, input: string, extraArgs: strin
 export function activate(context: vscode.ExtensionContext) {
 	console.log('ree-templates: activate() started');
 
+	// ─── inline decorations (created first so the LSP start can refresh them) ─
+
+	const inlineDecorations = createInlineDecorations();
+
 	// ─── LSP CLIENT ────────────────────────────────────────────────────────
 
 	try {
 		const lsp_client = create_lsp_client(context);
-		start_client(lsp_client, context);
+		const start_promise = start_client(lsp_client, context);
+		// Inline decorations were computed before the LSP was ready and used
+		// the local fallback; once the server is running, recompute through the
+		// profile-aware resolver so route-shadowed locales resolve correctly.
+		start_promise.then(() => inlineDecorations.refresh());
 		console.log('ree-templates: LSP client created and started');
 	} catch (err: any) {
 		console.error('ree-templates: LSP client creation failed:', err.message ?? err);
@@ -262,7 +270,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// which have no equivalent in the LSP protocol.
 
 	// 1. Inline decorations — show → translated value after {_ / {- tags
-	const inlineDecorations = createInlineDecorations();
+	//    (created above, before the LSP starts)
 
 	// 2. Status bar — language switcher
 	const localeStatusBar = createLocaleStatusBarItem();
