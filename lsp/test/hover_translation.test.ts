@@ -24,8 +24,8 @@ describe("Translation hover", () => {
 
 		const source = "{_ ui.title }";
 		const position = { line: 0, character: 5 };
-		const home_file = join(project_root, "routes", "home", "home.ree");
-		const kitchen_file = join(project_root, "routes", "examples", "kitchen_sink", "kitchen_sink.ree");
+		const home_file = join(project_root, "apps", "main", "home", "home.ree");
+		const kitchen_file = join(project_root, "apps", "main", "examples", "kitchen_sink", "kitchen_sink.ree");
 		const home_uri = pathToFileURL(home_file).href;
 		const kitchen_uri = pathToFileURL(kitchen_file).href;
 
@@ -37,6 +37,10 @@ describe("Translation hover", () => {
 		expect(home_value).toContain("Home Page");
 		expect(kitchen_value).toContain("Kitchen Sink");
 		expect(kitchen_value).not.toContain("Home Page");
+
+		// Shadow overrides must not duplicate rows: each locale appears once.
+		expect(home_value.match(/\| EN-US \|/g)?.length).toBe(1);
+		expect(home_value.match(/\| SL-SI \|/g)?.length).toBe(1);
 	});
 
 	test("merges Reeweb root and route-local translations", async () => {

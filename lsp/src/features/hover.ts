@@ -14,7 +14,7 @@ import { find_token_at, get_word_at } from "../parser/contexts";
 import { position_to_offset } from "../documents/positions";
 import { is_locale_file, type ReeProjectProfile } from "../profiles/index";
 import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
@@ -155,36 +155,67 @@ function hover_for_token(token: import("../parser/ast").Token, profile?: ReeProj
 
 function lookup_all_locale_values(key: string, profile: ReeProjectProfile, document_uri?: string): { locale: string; value: string }[] {
 	const results: { locale: string; value: string }[] = [];
+	const from_file = document_uri ? file_uri_to_path(document_uri) : undefined;
+
+	// Enumerate locale files through the template's route shadow chain so
+	// route-local overrides (and locales that only exist there) are included.
+	// Falls back to scanning translation roots when the profile provides no
+	// chain resolver.
+	const locale_files = profile.translation_definition_files
+		? profile.translation_definition_files(from_file ?? "")
+		: fallback_locale_files(profile);
+
+	// definition files list the most specific file for a locale first, so the
+	// first occurrence wins and later ones are skipped - one row per locale,
+	// no duplicate translations for the same locale.
+	const seen = new Set<string>();
+	for (const full_path of locale_files) {
+		const locale = basename(full_path, ".json");
+		if (seen.has(locale)) continue;
+		seen.add(locale);
+
+		const cache_key = from_file ? `${full_path}::${from_file}` : full_path;
+		let index: Map<string, string> | null;
+		if (translation_cache.has(cache_key)) {
+			index = translation_cache.get(cache_key) ?? null;
+		} else {
+			index = profile.load_translation_index?.(full_path, from_file) ?? null;
+			translation_cache.set(cache_key, index);
+		}
+
+		if (index?.has(key)) {
+			results.push({ locale, value: index.get(key)! });
+		}
+	}
+
+	results.sort((a, b) => a.locale.localeCompare(b.locale));
+	return results;
+}
+
+/**
+ * Locale files from every translation root, used when a profile has no
+ * shadow-chain resolver. One file per locale, most specific root first.
+ */
+function fallback_locale_files(profile: ReeProjectProfile): string[] {
+	const files: string[] = [];
+	const seen = new Set<string>();
 
 	for (const root of profile.translation_roots) {
 		if (!existsSync(root)) continue;
 		try {
-			const files = readdirSync(root).filter(is_locale_file);
-			files.sort();
-			for (const file of files) {
-				const locale = file.replace(/\.json$/, "");
-				const full_path = join(root, file);
-				const from_file = document_uri ? file_uri_to_path(document_uri) : undefined;
-				const cache_key = from_file ? `${full_path}::${from_file}` : full_path;
-
-				let index: Map<string, string> | null;
-				if (translation_cache.has(cache_key)) {
-					index = translation_cache.get(cache_key) ?? null;
-				} else {
-					index = profile.load_translation_index?.(full_path, from_file) ?? null;
-					translation_cache.set(cache_key, index);
-				}
-
-				if (index?.has(key)) {
-					results.push({ locale, value: index.get(key)! });
-				}
+			const names = readdirSync(root).filter(is_locale_file);
+			names.sort();
+			for (const name of names) {
+				if (seen.has(name)) continue;
+				seen.add(name);
+				files.push(join(root, name));
 			}
 		} catch {
-			// Skip unreadable roots
+			// Unreadable root
 		}
 	}
 
-	return results;
+	return files;
 }
 
 function file_uri_to_path(uri: string): string | undefined {
