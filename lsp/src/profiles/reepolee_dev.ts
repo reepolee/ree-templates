@@ -226,6 +226,14 @@ function locale_dirs_for(project_root: string, from_ree_file?: string): string[]
 	const root_dir = locale_dir_for(join(project_root, LOCALES_DIR));
 	if (root_dir) dirs.push(root_dir);
 
+	// Configured translation roots may contain shared locale directories even
+	// when the project has no repository-root `locales/` directory. Add those
+	// roots as fallback layers before resolving the document's route shadows.
+	for (const translation_root of translation_roots_for_project(project_root)) {
+		const locale_dir = locale_dir_for(translation_root);
+		if (locale_dir && !dirs.includes(locale_dir)) dirs.push(locale_dir);
+	}
+
 	if (from_ree_file) {
 		const chain: string[] = [];
 		let dir = dirname(from_ree_file);
@@ -244,6 +252,23 @@ function locale_dirs_for(project_root: string, from_ree_file?: string): string[]
 	}
 
 	return dirs;
+}
+
+function translation_roots_for_project(project_root: string): string[] {
+	try {
+		const package_file = join(project_root, "package.json");
+		if (!existsSync(package_file)) return [];
+		const package_data = JSON.parse(readFileSync(package_file, "utf-8")) as {
+			ree?: { translation_roots?: unknown };
+		};
+		const configured = package_data.ree?.translation_roots;
+		if (!Array.isArray(configured)) return [];
+		return configured
+			.filter((root): root is string => typeof root === "string" && root.length > 0)
+			.map((root) => join(project_root, root));
+	} catch {
+		return [];
+	}
 }
 
 function locale_files_in(dir: string): string[] {

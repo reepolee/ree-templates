@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -38,7 +38,6 @@ describe("Translation hover", () => {
 		expect(kitchen_value).toContain("Kitchen Sink");
 		expect(kitchen_value).not.toContain("Home Page");
 
-		// Shadow overrides must not duplicate rows: each locale appears once.
 		expect(home_value.match(/\| EN-US \|/g)?.length).toBe(1);
 		expect(home_value.match(/\| SL-SI \|/g)?.length).toBe(1);
 	});
@@ -72,10 +71,53 @@ describe("Translation hover", () => {
 		const profile = fake_profile(translation_root);
 		const hover = compute_hover("{_ ui.title }", { line: 0, character: 5 }, profile, "file:///project/routes/home.ree");
 		const value = hover_value(hover);
-		// Values render bold inside the locale table.
 		const locale_values = value.match(/\*\*value-\d+\*\*/g);
 
 		expect(locale_values?.length).toBe(12);
+	});
+
+	test("includes root fallback and shadows from all configured Reepolee roots", async () => {
+		const project_root = mkdtempSync(join(tmpdir(), "ree-lsp-multi-root-"));
+		temp_dirs.push(project_root);
+
+		const main_route = join(project_root, "apps", "main", "home");
+		const main_locales = join(main_route, "locales");
+		const shared_locales = join(project_root, "locales");
+		mkdirSync(main_locales, { recursive: true });
+		mkdirSync(shared_locales, { recursive: true });
+		mkdirSync(join(project_root, "apps", "reeman"), { recursive: true });
+		mkdirSync(join(project_root, "apps", "reeqa"), { recursive: true });
+		mkdirSync(join(project_root, "platform"), { recursive: true });
+
+		writeFileSync(join(project_root, "package.json"), JSON.stringify({
+			ree: {
+				project_family: "reepolee",
+				template_roots: ["apps/main", "apps/reeman", "apps/reeqa", "platform"],
+				component_roots: ["components"],
+				translation_provider: "route-json",
+				translation_roots: ["apps/main", "apps/reeman", "apps/reeqa", "platform"],
+			},
+		}), "utf-8");
+		writeFileSync(join(main_route, "home.ree"), "{_ outside_temperature.label}", "utf-8");
+		writeFileSync(join(shared_locales, "en-us.json"), JSON.stringify({ outside_temperature: { label: "Shared temperature" } }), "utf-8");
+		writeFileSync(join(shared_locales, "sl-si.json"), JSON.stringify({ outside_temperature: { label: "Skupna temperatura" } }), "utf-8");
+		writeFileSync(join(main_locales, "en-us.json"), JSON.stringify({ outside_temperature: { label: "Outside Temperature" } }), "utf-8");
+		writeFileSync(join(main_locales, "sl-si.json"), JSON.stringify({ outside_temperature: { label: "Zunanja temperatura" } }), "utf-8");
+
+		const profile = await detect_profile(project_root);
+		expect(profile?.name).toBe("reepolee");
+		const hover = compute_hover(
+			"{_ outside_temperature.label}",
+			{ line: 0, character: 5 },
+			profile,
+			pathToFileURL(join(main_route, "home.ree")).href,
+		);
+		const value = hover_value(hover);
+
+		expect(value).toContain("Outside Temperature");
+		expect(value).toContain("Zunanja temperatura");
+		expect(value).not.toContain("Shared temperature");
+		expect(value).not.toContain("Skupna temperatura");
 	});
 });
 
