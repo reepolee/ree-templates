@@ -1,5 +1,5 @@
 /**
- * reepolee-dev project profile.
+ * Reepolee project profile.
  *
  * Conventions:
  * - Routes live in `routes/` (standard module-based routing)

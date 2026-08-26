@@ -40,7 +40,7 @@ import { find_definition } from "./features/definition";
 import { compute_symbols, compute_folding_ranges } from "./features/symbols";
 import { format_document } from "./features/formatting";
 import { detect_profile, type ReeProjectProfile } from "./profiles/index";
-import { invalidate_component_index } from "./profiles/reepolee_dev";
+import { invalidate_component_index } from "./profiles/reepolee";
 
 // ---------------------------------------------------------------------------
 // Create connection

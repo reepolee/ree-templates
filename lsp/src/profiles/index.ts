@@ -93,7 +93,7 @@ export async function detect_profile(start_dir: string): Promise<ReeProjectProfi
 		// Legacy project markers preserve editor support for projects created
 		// before the package.json Ree metadata was introduced.
 		if (existsSync(join(dir, "routes")) && existsSync(join(dir, "lib", "template", "compiler.ts"))) {
-			const { create_reepolee_profile } = await import("./reepolee_dev");
+			const { create_reepolee_profile } = await import("./reepolee");
 			return create_reepolee_profile(dir, legacy_reepolee_config());
 		}
 
@@ -117,7 +117,7 @@ export async function detect_profile(start_dir: string): Promise<ReeProjectProfi
 
 async function create_profile_from_config(project_root: string, config: ReeProjectConfig): Promise<ReeProjectProfile | null> {
 	if (config.project_family === "reepolee") {
-		const { create_reepolee_profile } = await import("./reepolee_dev");
+		const { create_reepolee_profile } = await import("./reepolee");
 		return create_reepolee_profile(project_root, config);
 	}
 
