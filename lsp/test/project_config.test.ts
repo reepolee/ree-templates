@@ -32,7 +32,7 @@ describe("package.json Ree project metadata", () => {
 
 	test("loads helper names from the detected project", async () => {
 		const project_root = create_project("reepolee");
-		const helper_dir = join(project_root, "lib", "template");
+		const helper_dir = join(project_root, "lib");
 		mkdirSync(helper_dir, { recursive: true });
 		writeFileSync(
 			join(helper_dir, "helper_names.ts"),

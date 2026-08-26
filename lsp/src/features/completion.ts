@@ -13,7 +13,6 @@ import { CompletionItemKind as K } from "vscode-languageserver";
 
 import { offset_range, position_to_offset } from "../documents/positions";
 import { is_locale_file, type ReeProjectProfile } from "../profiles/index";
-import { DEFAULT_HELPER_NAMES } from "../profiles/helper_loader";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,10 +156,6 @@ const OUTPUT_SNIPPETS: SnippetDef[] = [
 	},
 ];
 
-// Fallback for when no profile is available (keeps server working standalone).
-// When a profile is loaded, its helper_names come from the real source file.
-const HELPER_NAMES = DEFAULT_HELPER_NAMES;
-
 // ---------------------------------------------------------------------------
 // Context detection
 // ---------------------------------------------------------------------------
@@ -229,7 +224,7 @@ export function compute_completions(text: string, position: Position, profile?: 
 	}
 
 	if (ctx.is_in_output_tag) {
-		const helpers = profile?.helper_names ?? HELPER_NAMES;
+		const helpers = profile?.helper_names ?? [];
 		for (const name of helpers) {
 			items.push({
 				label: name,
@@ -292,7 +287,7 @@ export function compute_completions(text: string, position: Position, profile?: 
 	}
 
 	if (!ctx.is_after_open_brace && !ctx.is_in_block_tag && !ctx.is_in_translation_tag) {
-		const helpers = profile?.helper_names ?? HELPER_NAMES;
+		const helpers = profile?.helper_names ?? [];
 		for (const name of helpers) {
 			items.push({
 				label: name,
