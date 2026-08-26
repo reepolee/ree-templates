@@ -16,7 +16,7 @@ import { join, dirname, basename, relative, sep } from "node:path";
 
 import type { ReeProjectProfile, ResolvedTarget } from "./index";
 import { is_locale_file, within_base, flatten_json, TEMPLATE_EXT } from "./index";
-import { DEFAULT_HELPER_NAMES } from "./helper_loader";
+import { load_helper_names } from "./helper_loader";
 import { local_resolve } from "./include_loader";
 import type { ReeProjectConfig } from "./project_config";
 
@@ -31,6 +31,7 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 	const route_roots = config.template_roots.map((template_root) => join(project_root, template_root));
 	const component_roots = config.component_roots.map((component_root) => join(project_root, component_root));
 	const translation_roots = config.translation_roots.map((root) => join(project_root, root));
+	const helper_names = await load_helper_names(project_root);
 
 	return {
 		project_root,
@@ -39,7 +40,7 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 		route_roots,
 		component_roots,
 		translation_roots,
-		helper_names: DEFAULT_HELPER_NAMES,
+		helper_names,
 
 		resolve_include(path_value: string, from_file: string): ResolvedTarget | undefined {
 			// A template may live under any route root, so try each in order

@@ -19,7 +19,7 @@ import { basename, dirname, join } from "node:path";
 
 import type { ReeProjectProfile, ResolvedTarget } from "./index";
 import { is_locale_file, resolve_template_file, within_base, flatten_json } from "./index";
-import { DEFAULT_HELPER_NAMES } from "./helper_loader";
+import { load_helper_names } from "./helper_loader";
 import { local_resolve } from "./include_loader";
 import type { ReeProjectConfig } from "./project_config";
 
@@ -33,6 +33,7 @@ export async function create_reeweb_profile(project_root: string, config: ReePro
 	const views_dir = route_roots[0]!;
 	const component_root = component_roots[0]!;
 	const translation_root = join(project_root, config.translation_roots[0]!);
+	const helper_names = await load_helper_names(project_root);
 
 	return {
 		project_root,
@@ -41,7 +42,7 @@ export async function create_reeweb_profile(project_root: string, config: ReePro
 		route_roots,
 		component_roots,
 		translation_roots: [translation_root],
-		helper_names: DEFAULT_HELPER_NAMES,
+		helper_names,
 
 		resolve_include(path_value: string, from_file: string): ResolvedTarget | undefined {
 			// Pre-process: $routes/ → non-alias path (views-relative page)

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -28,6 +28,21 @@ describe("package.json Ree project metadata", () => {
 
 		expect(profile?.name).toBe("reepolee");
 		expect(profile?.translation_roots).toEqual([join(project_root, "routes"), join(project_root, "routes_reeman")]);
+	});
+
+	test("loads helper names from the detected project", async () => {
+		const project_root = create_project("reepolee");
+		const helper_dir = join(project_root, "lib", "template");
+		mkdirSync(helper_dir, { recursive: true });
+		writeFileSync(
+			join(helper_dir, "helper_names.ts"),
+			'export const DEFAULT_HELPER_NAMES = ["custom_timestamp_helper"] as const;\n',
+			"utf-8",
+		);
+
+		const profile = await detect_profile(project_root);
+
+		expect(profile?.helper_names).toEqual(["custom_timestamp_helper"]);
 	});
 });
 
