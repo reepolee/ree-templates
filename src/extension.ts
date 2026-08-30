@@ -175,7 +175,7 @@ async function format_sql_file(): Promise<void> {
 	if (document_extension(document) !== '.sql') return;
 
 	try {
-		const formatted = await format_cli_document(document, ['--unwrap-joins', '--remove-backticks']);
+		const formatted = await format_cli_document(document, ['--unwrap-joins', '--remove-backticks', '--clean']);
 		if (formatted !== document.getText()) {
 			await editor.edit(editBuilder => editBuilder.replace(
 				new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),

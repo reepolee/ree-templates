@@ -67,7 +67,7 @@
 			},
 			{
 				"command": "ree.formatSqlFile",
-				"title": "ree: Format SQL (unwrap joins, remove backticks)",
+				"title": "ree: Format SQL (unwrap joins, remove backticks, clean)",
 				"enablement": "editorLangId == sql"
 			},
 			{
