@@ -16,7 +16,7 @@ indentation.
 ## Commands
 
 - **ree: Format SQL (unwrap joins, remove backticks, clean)** (`ree.formatSqlFile`) - runs
-  `reesql --unwrap-joins --remove-backticks --clean` on the active `.sql` file.
+  `reesql --stdin --unwrap-joins --remove-backticks --clean` on the current selection, or the whole `.sql` file when there is no selection.
 - **ree: Format with reprint** (`ree.formatWithReprint`) - runs
   `reettier --full`, doing a full AST re-derivation of all line breaks instead
   of preserving the ones you wrote.
