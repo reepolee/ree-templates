@@ -286,6 +286,18 @@ connection.onRequest("ree/getTranslations", async (params: { textDocument: { uri
 	}
 });
 
+connection.onRequest("ree/getEnvVarDescription", async (params: { textDocument: { uri: string }; name: string }) => {
+	if (!/^[A-Z][A-Z0-9_]*$/.test(params.name)) return null;
+
+	try {
+		const project_profile = await profile_for_document(params.textDocument.uri);
+		return project_profile?.env_var_descriptions.get(params.name) ?? null;
+	} catch (err: any) {
+		console.error(`ree-lsp getEnvVarDescription error: ${err.message ?? err}`);
+		return null;
+	}
+});
+
 // ---------------------------------------------------------------------------
 // Shutdown / Exit handlers
 // ---------------------------------------------------------------------------

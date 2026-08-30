@@ -66,6 +66,10 @@ const HELPER_DOCS: Record<string, string> = {
 };
 
 const ENV_VAR_NAME_RE = /^[A-Z][A-Z0-9_]*$/;
+const ENV_VAR_ACCESS_RE = /(?:^|[^A-Za-z0-9_$])(?:Bun|process)\.env\.(?<name>[A-Za-z_$][\w$]*)/g;
+const ENV_VAR_BRACKET_ACCESS_RE = /(?:^|[^A-Za-z0-9_$])(?:Bun|process)\.env\[(?<quote>["'`])(?<name>[A-Za-z_$][\w$]*)\k<quote>\]/g;
+const REQUIRE_ENV_DECLARATION_RE = /\b(?:const|let|var)\s+(?<name>[A-Za-z_$][\w$]*)\s*=\s*require_env\(\s*(?<quote>["'`])\k<name>\k<quote>/g;
+const REQUIRE_ENV_ACCESS_RE = /(?:^|[^A-Za-z0-9_$])require_env\(\s*(?<quote>["'`])(?<name>[A-Za-z_$][\w$]*)\k<quote>/g;
 
 // ---------------------------------------------------------------------------
 // Main entry point
@@ -103,33 +107,30 @@ export function compute_hover(text: string, position: Position, profile?: ReePro
 function env_var_at(text: string, offset: number, profile?: ReeProjectProfile | null): { name: string; description: string } | undefined {
 	if (!profile) return undefined;
 
-	const word_range = word_range_at(text, offset);
-	if (!word_range || !ENV_VAR_NAME_RE.test(word_range.word)) return undefined;
+	for (const access_pattern of [ENV_VAR_ACCESS_RE, ENV_VAR_BRACKET_ACCESS_RE, REQUIRE_ENV_DECLARATION_RE, REQUIRE_ENV_ACCESS_RE]) {
+		for (const match of text.matchAll(access_pattern)) {
+			const name = match.groups?.name;
+			const match_start = match.index ?? -1;
+			if (!name || match_start < 0) continue;
 
-	const before_word = text.slice(0, word_range.start);
-	const after_word = text.slice(word_range.end);
-	const is_dot_access = /(?:^|[^A-Za-z0-9_$])(?:Bun|process)\.env\.$/.test(before_word);
-	const is_bracket_access = /(?:^|[^A-Za-z0-9_$])(?:Bun|process)\.env\[['\"]$/.test(before_word)
-		&& /^[\'\"]\]/.test(after_word);
-	if (!is_dot_access && !is_bracket_access) return undefined;
+			const name_offsets = access_pattern === REQUIRE_ENV_DECLARATION_RE
+				? [match[0].indexOf(name), match[0].lastIndexOf(name)]
+				: [match[0].lastIndexOf(name)];
+			for (const name_offset of name_offsets) {
+				const name_start = match_start + name_offset;
+				const name_end = name_start + name.length;
+				if (offset < name_start || offset > name_end) continue;
+				if (!ENV_VAR_NAME_RE.test(name)) return undefined;
 
-	const description = profile.env_var_descriptions.get(word_range.word);
-	if (!description) return undefined;
-	return { name: word_range.word, description };
+				const description = profile.env_var_descriptions.get(name);
+				if (!description) return undefined;
+				return { name, description };
+			}
+		}
+	}
+
+	return undefined;
 }
-
-function word_range_at(text: string, offset: number): { word: string; start: number; end: number } | undefined {
-	let start = offset;
-	while (start > 0 && /[A-Za-z_$\w]/.test(text[start - 1] ?? "")) start--;
-
-	let end = offset;
-	while (end < text.length && /[A-Za-z_$\w]/.test(text[end] ?? "")) end++;
-
-	const word = text.slice(start, end);
-	if (!/^[A-Za-z_$][\w$]*$/.test(word)) return undefined;
-	return { word, start, end };
-}
-
 // ---------------------------------------------------------------------------
 // Token → documentation
 // ---------------------------------------------------------------------------

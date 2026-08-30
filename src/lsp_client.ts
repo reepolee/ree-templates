@@ -227,3 +227,15 @@ export async function get_translations_via_lsp(document_uri: string): Promise<Re
 		return null;
 	}
 }
+
+export async function get_env_var_description_via_lsp(document_uri: string, name: string): Promise<string | null> {
+	if (!client || client.state !== 2 /* Running */) return null;
+	try {
+		return await client.sendRequest("ree/getEnvVarDescription", {
+			textDocument: { uri: document_uri },
+			name,
+		});
+	} catch {
+		return null;
+	}
+}

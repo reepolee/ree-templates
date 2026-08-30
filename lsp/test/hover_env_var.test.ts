@@ -38,6 +38,17 @@ describe("Environment variable hover", () => {
 		expect(hover_value(hover)).toContain("Main app port from this project.");
 	});
 
+	test("recognizes require_env string arguments", async () => {
+		const project_root = create_project();
+		const profile = await detect_profile(project_root);
+		const source = 'const DEV_CONNECTION_STRING = require_env("DEV_CONNECTION_STRING");';
+		const hover = compute_hover(source, { line: 0, character: source.indexOf("DEV_CONNECTION_STRING") + 1 }, profile);
+		const quoted_hover = compute_hover(source, { line: 0, character: source.lastIndexOf("DEV_CONNECTION_STRING") + 1 }, profile);
+
+		expect(hover_value(hover)).toContain("Development DB description from this project.");
+		expect(hover_value(quoted_hover)).toContain("Development DB description from this project.");
+	});
+
 	test("does not match lowercase, unknown, or extended names", async () => {
 		const project_root = create_project();
 		const profile = await detect_profile(project_root);
@@ -72,7 +83,7 @@ function create_project(descriptions_path = "config/env_var_descriptions.ts"): s
 	}), "utf-8");
 	writeFileSync(
 		join(project_root, descriptions_path),
-		'export const ENV_VAR_DESCRIPTIONS: Record<string, string> = { PORT: "Main app port from this project." };\n',
+		'export const ENV_VAR_DESCRIPTIONS: Record<string, string> = { PORT: "Main app port from this project.", DEV_CONNECTION_STRING: "Development DB description from this project." };\n',
 		"utf-8",
 	);
 	return project_root;

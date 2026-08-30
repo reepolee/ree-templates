@@ -6,6 +6,7 @@ import * as fs from 'fs';
 // ─── LSP client ────────────────────────────────────────────────────────────
 
 import { create_lsp_client, start_client, deactivate_client } from './lsp_client';
+import { create_env_var_hover_provider } from './env_var_hover';
 
 // ─── i18n (VS Code-specific features only) ─────────────────────────────────
 // The LSP handles: hover, completion, definition, diagnostics, and code actions
@@ -199,6 +200,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// ─── inline decorations (created first so the LSP start can refresh them) ─
 
 	const inlineDecorations = createInlineDecorations();
+	const envVarHoverProvider = create_env_var_hover_provider();
 
 	// ─── LSP CLIENT ────────────────────────────────────────────────────────
 
@@ -386,6 +388,7 @@ export function activate(context: vscode.ExtensionContext) {
 		inlineDecorations,
 		localeStatusBar,
 		refreshInlineCmd,
+		envVarHoverProvider,
 	);
 }
 
