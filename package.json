@@ -24,6 +24,13 @@
 		"Themes"
 	],
 	"main": "./dist/extension.js",
+	"activationEvents": [
+		"onLanguage:javascript",
+		"onLanguage:javascriptreact",
+		"onLanguage:typescript",
+		"onLanguage:typescriptreact",
+		"onLanguage:ree"
+	],
 	"workspaces": [
 		"lsp"
 	],
