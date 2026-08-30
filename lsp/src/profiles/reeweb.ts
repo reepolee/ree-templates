@@ -20,6 +20,7 @@ import { basename, dirname, join } from "node:path";
 import type { ReeProjectProfile, ResolvedTarget } from "./index";
 import { is_locale_file, resolve_template_file, within_base, flatten_json } from "./index";
 import { load_helper_names } from "./helper_loader";
+import { load_env_var_descriptions } from "./env_var_descriptions";
 import { local_resolve } from "./include_loader";
 import type { ReeProjectConfig } from "./project_config";
 
@@ -27,13 +28,14 @@ import type { ReeProjectConfig } from "./project_config";
 // Factory
 // ---------------------------------------------------------------------------
 
-export async function create_reeweb_profile(project_root: string, config: ReeProjectConfig): Promise<ReeProjectProfile> {
+export async function create_reeweb_profile(project_root: string, config: ReeProjectConfig, env_var_descriptions_path = "config/env_var_descriptions.ts"): Promise<ReeProjectProfile> {
 	const route_roots = config.template_roots.map((template_root) => join(project_root, template_root));
 	const component_roots = config.component_roots.map((component_root) => join(project_root, component_root));
 	const views_dir = route_roots[0]!;
 	const component_root = component_roots[0]!;
 	const translation_root = join(project_root, config.translation_roots[0]!);
 	const helper_names = await load_helper_names(project_root);
+	const env_var_descriptions = await load_env_var_descriptions(project_root, env_var_descriptions_path);
 
 	return {
 		project_root,
@@ -43,6 +45,7 @@ export async function create_reeweb_profile(project_root: string, config: ReePro
 		component_roots,
 		translation_roots: [translation_root],
 		helper_names,
+		env_var_descriptions,
 
 		resolve_include(path_value: string, from_file: string): ResolvedTarget | undefined {
 			// Pre-process: $routes/ → non-alias path (views-relative page)

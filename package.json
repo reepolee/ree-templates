@@ -103,6 +103,12 @@
 					"scope": "window",
 					"description": "Default locale to display in inline translation decorations and hover."
 				},
+				"ree.envVarDescriptionsPath": {
+					"type": "string",
+					"default": "config/env_var_descriptions.ts",
+					"scope": "window",
+					"description": "Project-relative path to the TypeScript file exporting ENV_VAR_DESCRIPTIONS for environment-variable hover."
+				},
 				"ree.server.command": {
 					"type": "string",
 					"default": "bun",

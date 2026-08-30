@@ -41,6 +41,7 @@ import { compute_symbols, compute_folding_ranges } from "./features/symbols";
 import { format_document } from "./features/formatting";
 import { detect_profile, type ReeProjectProfile } from "./profiles/index";
 import { invalidate_component_index } from "./profiles/reepolee";
+import { DEFAULT_ENV_VAR_DESCRIPTIONS_PATH } from "./profiles/env_var_descriptions";
 
 // ---------------------------------------------------------------------------
 // Create connection
@@ -66,6 +67,7 @@ const profile_cache = new Map<string, ReeProjectProfile | null>();
  * several locales. Supplied by the client and refreshed on settings changes.
  */
 let preferred_locale: string | undefined;
+let env_var_descriptions_path = DEFAULT_ENV_VAR_DESCRIPTIONS_PATH;
 
 function read_preferred_locale(settings: unknown): string | undefined {
 	if (settings === null || typeof settings !== "object") return undefined;
@@ -77,9 +79,18 @@ function read_preferred_locale(settings: unknown): string | undefined {
 	return typeof locale === "string" && locale.length > 0 ? locale : undefined;
 }
 
+function read_env_var_descriptions_path(settings: unknown): string {
+	if (settings === null || typeof settings !== "object") return DEFAULT_ENV_VAR_DESCRIPTIONS_PATH;
+	const ree_settings = (settings as Record<string, unknown>).ree;
+	if (ree_settings === null || typeof ree_settings !== "object") return DEFAULT_ENV_VAR_DESCRIPTIONS_PATH;
+	const path_value = (ree_settings as Record<string, unknown>).envVarDescriptionsPath;
+	return typeof path_value === "string" ? path_value : DEFAULT_ENV_VAR_DESCRIPTIONS_PATH;
+}
+
 connection.onInitialize(async (params: InitializeParams): Promise<InitializeResult> => {
 	profile_cache.clear();
 	preferred_locale = read_preferred_locale(params.initializationOptions);
+	env_var_descriptions_path = read_env_var_descriptions_path(params.initializationOptions);
 
 	return {
 		capabilities: {
@@ -106,8 +117,11 @@ connection.onInitialized(() => {
 
 connection.onDidChangeConfiguration((params) => {
 	const updated = read_preferred_locale(params.settings);
-	if (updated === preferred_locale) return;
+	const updated_env_var_descriptions_path = read_env_var_descriptions_path(params.settings);
+	if (updated === preferred_locale && updated_env_var_descriptions_path === env_var_descriptions_path) return;
 	preferred_locale = updated;
+	env_var_descriptions_path = updated_env_var_descriptions_path;
+	profile_cache.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -149,6 +163,7 @@ connection.onDidChangeWatchedFiles(() => {
 	invalidate_completion_translation_cache();
 	invalidate_hover_translation_cache();
 	invalidate_component_index();
+	profile_cache.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -287,7 +302,7 @@ async function profile_for_document(document_uri: string): Promise<ReeProjectPro
 			return profile_cache.get(document_dir) ?? null;
 		}
 
-		const project_profile = await detect_profile(document_dir);
+		const project_profile = await detect_profile(document_dir, env_var_descriptions_path);
 		profile_cache.set(document_dir, project_profile);
 		return project_profile;
 	} catch {

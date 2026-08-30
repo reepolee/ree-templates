@@ -150,12 +150,17 @@ export function create_lsp_client(context: vscode.ExtensionContext): LanguageCli
 				translation: {
 					defaultLocale: get_default_locale(),
 				},
+				envVarDescriptionsPath: vscode.workspace
+					.getConfiguration("ree")
+					.get<string>("envVarDescriptionsPath", "config/env_var_descriptions.ts"),
 			},
 		},
 		synchronize: {
+			configurationSection: "ree",
 			fileEvents: [
 				vscode.workspace.createFileSystemWatcher("**/locales/*.json"),
 				vscode.workspace.createFileSystemWatcher("**/src/public/**/*.json"),
+				vscode.workspace.createFileSystemWatcher("**/config/env_var_descriptions.ts"),
 				// ReeTag components are indexed by basename from any .ree file,
 				// so creates/deletes anywhere invalidate the index.
 				vscode.workspace.createFileSystemWatcher("**/*.ree"),

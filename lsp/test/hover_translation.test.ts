@@ -135,6 +135,7 @@ function fake_profile(translation_root: string): ReeProjectProfile {
 		component_roots: [],
 		translation_roots: [translation_root],
 		helper_names: [],
+		env_var_descriptions: new Map(),
 		resolve_include() {
 			return undefined;
 		},

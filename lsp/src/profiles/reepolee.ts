@@ -17,6 +17,7 @@ import { join, dirname, basename, relative, sep } from "node:path";
 import type { ReeProjectProfile, ResolvedTarget } from "./index";
 import { is_locale_file, within_base, flatten_json, TEMPLATE_EXT } from "./index";
 import { load_helper_names } from "./helper_loader";
+import { load_env_var_descriptions } from "./env_var_descriptions";
 import { local_resolve } from "./include_loader";
 import type { ReeProjectConfig } from "./project_config";
 
@@ -27,11 +28,12 @@ const LOCALES_DIR = "locales";
 // Factory
 // ---------------------------------------------------------------------------
 
-export async function create_reepolee_profile(project_root: string, config: ReeProjectConfig): Promise<ReeProjectProfile> {
+export async function create_reepolee_profile(project_root: string, config: ReeProjectConfig, env_var_descriptions_path = "config/env_var_descriptions.ts"): Promise<ReeProjectProfile> {
 	const route_roots = config.template_roots.map((template_root) => join(project_root, template_root));
 	const component_roots = config.component_roots.map((component_root) => join(project_root, component_root));
 	const translation_roots = config.translation_roots.map((root) => join(project_root, root));
 	const helper_names = await load_helper_names(project_root);
+	const env_var_descriptions = await load_env_var_descriptions(project_root, env_var_descriptions_path);
 
 	return {
 		project_root,
@@ -41,6 +43,7 @@ export async function create_reepolee_profile(project_root: string, config: ReeP
 		component_roots,
 		translation_roots,
 		helper_names,
+		env_var_descriptions,
 
 		resolve_include(path_value: string, from_file: string): ResolvedTarget | undefined {
 			// A template may live under any route root, so try each in order

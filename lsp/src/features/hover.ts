@@ -65,6 +65,8 @@ const HELPER_DOCS: Record<string, string> = {
 	"tags": "`tags(val, colorClass?, translations?)` - Renders tags as pills.",
 };
 
+const ENV_VAR_NAME_RE = /^[A-Z][A-Z0-9_]*$/;
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -75,8 +77,13 @@ export function compute_hover(text: string, position: Position, profile?: ReePro
 
 	let doc: string | undefined;
 
+	const env_var = env_var_at(text, offset, profile);
+	if (env_var) {
+		doc = `**Environment variable** \`${env_var.name}\`\n\n${env_var.description}`;
+	}
+
 	if (token) {
-		doc = hover_for_token(token, profile, document_uri);
+		doc ??= hover_for_token(token, profile, document_uri);
 	}
 
 	if (!doc) {
@@ -91,6 +98,36 @@ export function compute_hover(text: string, position: Position, profile?: ReePro
 	return {
 		contents: { kind: "markdown" as const, value: doc },
 	};
+}
+
+function env_var_at(text: string, offset: number, profile?: ReeProjectProfile | null): { name: string; description: string } | undefined {
+	if (!profile) return undefined;
+
+	const word_range = word_range_at(text, offset);
+	if (!word_range || !ENV_VAR_NAME_RE.test(word_range.word)) return undefined;
+
+	const before_word = text.slice(0, word_range.start);
+	const after_word = text.slice(word_range.end);
+	const is_dot_access = /(?:^|[^A-Za-z0-9_$])(?:Bun|process)\.env\.$/.test(before_word);
+	const is_bracket_access = /(?:^|[^A-Za-z0-9_$])(?:Bun|process)\.env\[['\"]$/.test(before_word)
+		&& /^[\'\"]\]/.test(after_word);
+	if (!is_dot_access && !is_bracket_access) return undefined;
+
+	const description = profile.env_var_descriptions.get(word_range.word);
+	if (!description) return undefined;
+	return { name: word_range.word, description };
+}
+
+function word_range_at(text: string, offset: number): { word: string; start: number; end: number } | undefined {
+	let start = offset;
+	while (start > 0 && /[A-Za-z_$\w]/.test(text[start - 1] ?? "")) start--;
+
+	let end = offset;
+	while (end < text.length && /[A-Za-z_$\w]/.test(text[end] ?? "")) end++;
+
+	const word = text.slice(start, end);
+	if (!/^[A-Za-z_$][\w$]*$/.test(word)) return undefined;
+	return { word, start, end };
 }
 
 // ---------------------------------------------------------------------------

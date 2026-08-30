@@ -13,6 +13,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve as path_resolve, relative, sep } from "node:path";
 import { read_project_config, type ReeProjectConfig } from "./project_config";
+import { DEFAULT_ENV_VAR_DESCRIPTIONS_PATH } from "./env_var_descriptions";
 
 // ---------------------------------------------------------------------------
 // Profile type
@@ -44,6 +45,8 @@ export interface ReeProjectProfile {
 	translation_roots: string[];
 	/** Built-in helper function names available in templates */
 	helper_names: readonly string[];
+	/** Human-readable descriptions for environment variables in the project. */
+	env_var_descriptions: ReadonlyMap<string, string>;
 	/**
 	 * Resolve an include/layout path literal to a filesystem target.
 	 * Returns undefined when the target cannot be found or the path
@@ -80,13 +83,13 @@ export interface ReeProjectProfile {
  * Returns a profile or `null` when no recognized project is found
  * (structural features still work without a profile).
  */
-export async function detect_profile(start_dir: string): Promise<ReeProjectProfile | null> {
+export async function detect_profile(start_dir: string, env_var_descriptions_path = DEFAULT_ENV_VAR_DESCRIPTIONS_PATH): Promise<ReeProjectProfile | null> {
 	let dir = start_dir;
 
 	while (true) {
 		const project_config = read_project_config(dir);
 		if (project_config) {
-			const profile = await create_profile_from_config(dir, project_config);
+			const profile = await create_profile_from_config(dir, project_config, env_var_descriptions_path);
 			if (profile) return profile;
 		}
 
@@ -94,7 +97,7 @@ export async function detect_profile(start_dir: string): Promise<ReeProjectProfi
 		// before the package.json Ree metadata was introduced.
 		if (existsSync(join(dir, "routes")) && existsSync(join(dir, "lib", "template", "compiler.ts"))) {
 			const { create_reepolee_profile } = await import("./reepolee");
-			return create_reepolee_profile(dir, legacy_reepolee_config());
+			return create_reepolee_profile(dir, legacy_reepolee_config(), env_var_descriptions_path);
 		}
 
 		if (
@@ -103,7 +106,7 @@ export async function detect_profile(start_dir: string): Promise<ReeProjectProfi
 			&& existsSync(join(dir, "lib", "i18n.ts"))
 		) {
 			const { create_reeweb_profile } = await import("./reeweb");
-			return create_reeweb_profile(dir, legacy_reeweb_config());
+			return create_reeweb_profile(dir, legacy_reeweb_config(), env_var_descriptions_path);
 		}
 
 		// Walk up
@@ -115,15 +118,15 @@ export async function detect_profile(start_dir: string): Promise<ReeProjectProfi
 	return null;
 }
 
-async function create_profile_from_config(project_root: string, config: ReeProjectConfig): Promise<ReeProjectProfile | null> {
+async function create_profile_from_config(project_root: string, config: ReeProjectConfig, env_var_descriptions_path: string): Promise<ReeProjectProfile | null> {
 	if (config.project_family === "reepolee") {
 		const { create_reepolee_profile } = await import("./reepolee");
-		return create_reepolee_profile(project_root, config);
+		return create_reepolee_profile(project_root, config, env_var_descriptions_path);
 	}
 
 	if (config.project_family === "reeweb") {
 		const { create_reeweb_profile } = await import("./reeweb");
-		return create_reeweb_profile(project_root, config);
+		return create_reeweb_profile(project_root, config, env_var_descriptions_path);
 	}
 
 	return null;
