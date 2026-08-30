@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 
 // ─── LSP client ────────────────────────────────────────────────────────────
 
@@ -108,6 +109,98 @@ function run_formatter(cmd: string, cwd: string, input: string, extraArgs: strin
 	});
 }
 
+function run_command(cmd: string, args: string[], cwd: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const p = spawn(cmd, args, { cwd, stdio: ['ignore', 'ignore', 'pipe'] });
+		let err = '';
+
+		p.stderr.on('data', d => (err += d.toString()));
+		p.on('error', reject);
+		p.on('close', code => {
+			if (code === 0) resolve();
+			else reject(new Error(err.trim() || `${cmd} failed (${code})`));
+		});
+	});
+}
+
+function document_extension(document: vscode.TextDocument): string {
+	return path.extname(document.fileName).toLowerCase();
+}
+
+function is_ree_text_file(document: vscode.TextDocument): boolean {
+	return ['.js', '.ts', '.css'].includes(document_extension(document));
+}
+
+function is_supported_cli_file(document: vscode.TextDocument): boolean {
+	return is_ree_text_file(document) || document_extension(document) === '.sql';
+}
+
+function full_document_edit(document: vscode.TextDocument, text: string): vscode.TextEdit {
+	const fullRange = new vscode.Range(
+		document.positionAt(0),
+		document.positionAt(document.getText().length),
+	);
+	return vscode.TextEdit.replace(fullRange, text);
+}
+
+async function format_sql_text(document: vscode.TextDocument, cwd: string, extra_args: string[] = []): Promise<string> {
+	const temp_dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'ree-sql-'));
+	const temp_file = path.join(temp_dir, path.basename(document.fileName));
+
+	try {
+		await fs.promises.writeFile(temp_file, document.getText(), 'utf8');
+		await run_command('reesql', [...extra_args, temp_file], cwd);
+		return await fs.promises.readFile(temp_file, 'utf8');
+	} finally {
+		await fs.promises.rm(temp_dir, { recursive: true, force: true });
+	}
+}
+
+async function format_cli_document(document: vscode.TextDocument, extra_sql_args: string[] = []): Promise<string> {
+	const cwd = findProjectRoot(path.dirname(document.fileName));
+	if (document_extension(document) === '.sql') {
+		return format_sql_text(document, cwd, extra_sql_args);
+	}
+
+	const config = vscode.workspace.getConfiguration('ree', document.uri);
+	const cmd = resolve_formatter_cmd(config);
+	return run_formatter(cmd, cwd, document.getText(), [document_extension(document)]);
+}
+
+async function format_sql_file(): Promise<void> {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) return;
+
+	const document = editor.document;
+	if (document_extension(document) !== '.sql') return;
+
+	try {
+		const formatted = await format_cli_document(document, ['--unwrap-joins', '--remove-backticks']);
+		if (formatted !== document.getText()) {
+			await editor.edit(editBuilder => editBuilder.replace(
+				new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),
+				formatted,
+			));
+		}
+	} catch (err: any) {
+		vscode.window.showErrorMessage(`Formatting failed: ${err.message ?? err}`);
+	}
+}
+
+async function format_on_save(event: vscode.TextDocumentWillSaveEvent): Promise<vscode.TextEdit[]> {
+	const document = event.document;
+	const config = vscode.workspace.getConfiguration('ree', document.uri);
+	if (!config.get<boolean>('formatOnSave', false) || !is_supported_cli_file(document)) return [];
+
+	try {
+		const formatted = await format_cli_document(document);
+		return formatted === document.getText() ? [] : [full_document_edit(document, formatted)];
+	} catch (err: any) {
+		vscode.window.showErrorMessage(`Formatting on save failed: ${err.message ?? err}`);
+		return [];
+	}
+}
+
 // ─── activation ────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext) {
@@ -191,27 +284,35 @@ export function activate(context: vscode.ExtensionContext) {
 		const config = vscode.workspace.getConfiguration('ree', document.uri);
 		const cmd = resolve_formatter_cmd(config);
 		const cwd = findProjectRoot(path.dirname(document.fileName));
+		const selection = editor.selection;
+		const source = selection.isEmpty ? document.getText() : document.getText(selection);
 
 		try {
-			const formatted = await run_formatter(cmd, cwd, document.getText(), [
+			const formatted = await run_formatter(cmd, cwd, source, [
 				'--wrap-markup',
 				'--wrap-width',
 				width_text,
 			]);
 
-			const fullRange = new vscode.Range(
-				document.positionAt(0),
-				document.positionAt(document.getText().length)
-			);
-
 			await editor.edit(editBuilder => {
-				editBuilder.replace(fullRange, formatted);
+				const target = selection.isEmpty
+					? new vscode.Range(
+						document.positionAt(0),
+						document.positionAt(document.getText().length),
+					)
+					: selection;
+				editBuilder.replace(target, formatted);
 			});
 		} catch (err: any) {
 			vscode.window.showErrorMessage(
 				`${cmd} --wrap-markup --wrap-width ${width_text} failed: ${err.message ?? err}`
 			);
 		}
+	});
+
+	const formatSqlFileCommand = vscode.commands.registerCommand('ree.formatSqlFile', format_sql_file);
+	const formatOnSaveListener = vscode.workspace.onWillSaveTextDocument(event => {
+		event.waitUntil(format_on_save(event));
 	});
 
 	// ─── expand ReeTag (replace call site with the component's own body) ───
@@ -286,6 +387,8 @@ export function activate(context: vscode.ExtensionContext) {
 		formatCommand,
 		formatWithReprintCommand,
 		formatWithMarkupCommand,
+		formatSqlFileCommand,
+		formatOnSaveListener,
 		expandReeTagCommand,
 		checkFormattersCommand,
 

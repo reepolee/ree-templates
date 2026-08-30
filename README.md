@@ -15,12 +15,14 @@ indentation.
 
 ## Commands
 
+- **ree: Format SQL (unwrap joins, remove backticks)** (`ree.formatSqlFile`) - runs
+  `reesql --unwrap-joins --remove-backticks` on the active `.sql` file.
 - **ree: Format with reprint** (`ree.formatWithReprint`) - runs
   `reettier --full`, doing a full AST re-derivation of all line breaks instead
   of preserving the ones you wrote.
-- **ree: Format with markup wrapping** (`ree.formatWithMarkup`) - prompts for
-  a width and runs `reettier --wrap-markup --wrap-width <width>` for semantic
-  `.ree` markup wrapping.
+- **ree: Format with markup wrapping (file/selection)** (`ree.formatWithMarkup`) -
+  prompts for a width and runs `reettier --wrap-markup --wrap-width <width>` on
+  the current selection, or the whole `.ree` document when there is no selection.
 - **ree: Check Formatters (path and version)** (`ree.checkFormatters`) - reports
   the installed version of `reettier`, looked up by its own name on PATH (so a
   path shim does not mask the real version). A missing CLI shows as
@@ -35,6 +37,8 @@ indentation.
 ## Settings
 
 - `ree.reettierPath` - path to the reettier executable (empty = use PATH).
+- `ree.formatOnSave` - formats `.js`, `.ts`, and `.css` files through `reettier`,
+  and `.sql` files through plain `reesql`, when enabled.
 - `ree.server.command` - explicit language-server command.
 - `ree.server.args` - arguments for the explicit server command.
 - `ree.server.cwd` - working directory for the explicit server command.

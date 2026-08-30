@@ -63,7 +63,12 @@
 			},
 			{
 				"command": "ree.formatWithMarkup",
-				"title": "ree: Format with markup wrapping"
+				"title": "ree: Format with markup wrapping (file/selection)"
+			},
+			{
+				"command": "ree.formatSqlFile",
+				"title": "ree: Format SQL (unwrap joins, remove backticks)",
+				"enablement": "editorLangId == sql"
 			},
 			{
 				"command": "ree.expandReeTag",
@@ -86,6 +91,11 @@
 					"type": "string",
 					"default": "",
 					"description": "Path to the reettier executable. Leave empty to use reettier from PATH."
+				},
+				"ree.formatOnSave": {
+					"type": "boolean",
+					"default": false,
+					"description": "Format JavaScript, TypeScript, CSS, and SQL files through the bundled formatter integration when saving."
 				},
 				"ree.translation.defaultLocale": {
 					"type": "string",
