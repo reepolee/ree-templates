@@ -21,15 +21,20 @@ adapter through the `ree` object in its `package.json`:
 		"template_roots": ["src/public"],
 		"component_roots": ["src/components"],
 		"translation_provider": "route-json",
-		"translation_root": "src/public"
+		"translation_roots": ["src/public"]
 	}
 }
 ```
 
-Supported project families are `reepolee` with the `db-export` translation
-provider and `reeweb` with the `route-json` provider. The adapter is selected
-per document, so multi-root editor workspaces can contain both project types.
-Legacy structure detection remains available for projects without metadata.
+Supported project families are `reepolee` and `reeweb`, both using the
+`route-json` translation provider. The adapter is selected per document, so
+multi-root editor workspaces can contain both project types. Legacy structure
+detection remains available for projects without metadata.
+
+When a project contains `config/env_var_descriptions.ts`, the server also
+provides hover descriptions for documented environment-variable references in
+JavaScript and TypeScript files. The file must export an `ENV_VAR_DESCRIPTIONS`
+object. The path can be changed with `ree.envVarDescriptionsPath`.
 
 The extension bundles this server into its VSIX. It remains an LSP over stdio
 inside that product, but is not separately installed or distributed.

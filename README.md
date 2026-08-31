@@ -39,6 +39,11 @@ indentation.
 - `ree.reettierPath` - path to the reettier executable (empty = use PATH).
 - `ree.formatOnSave` - formats `.js`, `.ts`, and `.css` files through `reettier`,
   and `.sql` files through plain `reesql`, when enabled.
+- `ree.translation.defaultLocale` - locale used by translation inline
+  decorations, hover, and definition selection (default: `en-US`).
+- `ree.envVarDescriptionsPath` - project-relative TypeScript file exporting
+  `ENV_VAR_DESCRIPTIONS` for environment-variable hover (default:
+  `config/env_var_descriptions.ts`).
 - `ree.server.command` - explicit language-server command.
 - `ree.server.args` - arguments for the explicit server command.
 - `ree.server.cwd` - working directory for the explicit server command.
@@ -46,8 +51,12 @@ indentation.
 The extension bundles its internal language server inside the VSIX and launches
 it with Bun. Users do not need a sibling checkout, a global package, or a PATH
 entry. The server settings are overrides for development and troubleshooting.
-Translation hover reads every locale from the project's read-only translation
-export and refreshes when those locale files change.
+Translation hover reads every locale from the project's co-located locale JSON
+files and refreshes when those files change. In JavaScript and
+TypeScript files, the extension also shows descriptions for documented
+`Bun.env.NAME`, `process.env.NAME`, bracket access, and `require_env("NAME")`
+references. Descriptions come from the configured `ENV_VAR_DESCRIPTIONS` map.
+The default descriptions file is watched and reloads when it changes.
 
 Project behavior is selected from the project's `package.json` `ree` metadata.
 This supports renamed and extended clones of both Reepolee and Ree Web templates.
